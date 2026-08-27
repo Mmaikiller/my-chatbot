@@ -1,6 +1,7 @@
 import os
 import json
 import base64
+import datetime
 import requests
 from difflib import get_close_matches
 from flask import Flask, request, jsonify
@@ -72,8 +73,9 @@ def load_settings_from_github():
             settings = data
             if "chat_logs" not in settings:
                 settings["chat_logs"] = []
+            print("Loaded {} keywords from GitHub".format(len(settings.get("keywords", {}))))
         else:
-            print("GitHub load failed: {} {}".format(r.status_code, r.text[:100]))
+            print("GitHub load failed: {}".format(r.status_code))
     except Exception as e:
         print("Error loading from GitHub: {}".format(e))
 
@@ -123,7 +125,6 @@ def webhook():
                 sender = event['sender']['id']
                 load_settings_from_github()
 
-                # Postback (Get Started)
                 if 'postback' in event:
                     payload = event['postback'].get('payload', '')
                     title = event['postback'].get('title', '')
@@ -136,25 +137,29 @@ def webhook():
                         reply = get_reply(payload)
                         if reply:
                             send_message(sender, reply)
-                            log_chat(sender, payload, classify_message(payload))
+                        else:
+                            send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
+                        log_chat(sender, payload, classify_message(payload))
 
-                # ข้อความ
                 elif 'message' in event:
                     text = event['message'].get('text', '')
                     if text:
                         category = classify_message(text)
                         log_chat(sender, text, category)
+
                         reply = get_reply(text)
                         if reply:
                             send_message(sender, reply)
+                        else:
+                            send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
+
                         if category == "แจ้งปัญหา":
-                            print("ALERT: แจ้งปัญหาจาก {}: {}".format(sender, text))
+                            print("ALERT: แจ้งปัญหาจาก {} {}".format(sender, text))
 
         return 'OK', 200
     return 'OK', 200
 
 def get_user_name(sender_id):
-    """ดึงชื่อผู้ใช้จาก Facebook Graph API"""
     try:
         url = "https://graph.facebook.com/v19.0/{}?fields=first_name,last_name&access_token={}".format(sender_id, PAGE_ACCESS_TOKEN)
         r = requests.get(url, timeout=10)
@@ -169,7 +174,6 @@ def get_user_name(sender_id):
     return sender_id
 
 def log_chat(sender_id, text, category):
-    import datetime
     user_name = get_user_name(sender_id)
     chat_log = {
         "sender": sender_id,
