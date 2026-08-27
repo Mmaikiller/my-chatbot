@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facebook Chatbot Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Title Bar -->
+  <div class="title-bar">
+    <div class="title-bar-text">
+      <span class="app-icon">🤖</span>
+      <span>Facebook Chatbot Manager</span>
+    </div>
+    <div class="title-bar-controls">
+      <button class="btn-minimize" onclick="minimizeWindow()">—</button>
+      <button class="btn-maximize" onclick="maximizeWindow()">□</button>
+      <button class="btn-close" onclick="closeWindow()">✕</button>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="app-logo">
+          <div class="logo-icon">🤖</div>
+          <div class="logo-text">
+            <strong>Chatbot Manager</strong>
+            <small>จัดการแชทบอท Facebook</small>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+          <span class="nav-icon">🏠</span>
+          <span>แดชบอร์ด</span>
+        </a>
+        <a href="#" class="nav-item" data-page="pages" onclick="showPage('pages')">
+          <span class="nav-icon">📄</span>
+          <span>เพิ่มเพจ</span>
+        </a>
+        <a href="#" class="nav-item" data-page="auto-reply" onclick="showPage('auto-reply')">
+          <span class="nav-icon">💬</span>
+          <span>ตอบกลับอัตโนมัติ</span>
+        </a>
+        <a href="#" class="nav-item" data-page="broadcast" onclick="showPage('broadcast')">
+          <span class="nav-icon">📢</span>
+          <span>ส่งข้อความ</span>
+        </a>
+        <a href="#" class="nav-item" data-page="logs" onclick="showPage('logs')">
+          <span class="nav-icon">📋</span>
+          <span>ประวัติข้อความ</span>
+        </a>
+        <a href="#" class="nav-item" data-page="webhook" onclick="showPage('webhook')">
+          <span class="nav-icon">🔗</span>
+          <span>ตั้งค่า Webhook</span>
+        </a>
+        <a href="#" class="nav-item" data-page="settings" onclick="showPage('settings')">
+          <span class="nav-icon">⚙️</span>
+          <span>ตั้งค่า</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <small>© 2026 Chatbot Manager</small>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Dashboard Page -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <h1>🏠 แดชบอร์ด</h1>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card blue">
+            <div class="stat-icon">📄</div>
+            <div class="stat-info">
+              <h3 id="total-pages">0</h3>
+              <p>เพจที่เชื่อมต่อ</p>
+            </div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-icon">💬</div>
+            <div class="stat-info">
+              <h3 id="total-messages">0</h3>
+              <p>ข้อความทั้งหมด</p>
+            </div>
+          </div>
+          <div class="stat-card orange">
+            <div class="stat-icon">🤖</div>
+            <div class="stat-info">
+              <h3 id="bot-status">ปิดอยู่</h3>
+              <p>สถานะบอท</p>
+            </div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-icon">🔗</div>
+            <div class="stat-info">
+              <h3 id="webhook-status">ยังไม่ได้ตั้งค่า</h3>
+              <p>สถานะ Webhook</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>📄 เพจที่เชื่อมต่อ</h2>
+          </div>
+          <div class="card-body" id="pages-list-dashboard">
+            <div class="empty-state">
+              <p>ยังไม่มีเพจที่เชื่อมต่อ</p>
+              <button class="btn btn-primary" onclick="showPage('pages')">+ เพิ่มเพจ</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>💬 ข้อความล่าสุด</h2>
+          </div>
+          <div class="card-body" id="recent-messages">
+            <div class="empty-state">
+              <p>ยังไม่มีข้อความ</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pages Management Page -->
+      <div id="page-pages" class="page">
+        <div class="page-header">
+          <h1>📄 จัดการเพจ</h1>
+        </div>
+
+        <div class="card">
+          <div class="card-header blue-header">
+            <h2>+ เพิ่มเพจใหม่</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Page Access Token</label>
+              <div class="input-with-btn">
+                <input type="text" id="page-token-input" placeholder="วาง Page Access Token ที่นี่">
+                <button class="btn btn-secondary" onclick="pasteToken()">วาง</button>
+              </div>
+              <small class="help-text">วาง Page Access Token จากนั้นกด "ดึงข้อมูล" เพื่อดึงชื่อและ ID เพจอัตโนมัติ</small>
+            </div>
+            <button class="btn btn-primary" onclick="addPage()">+ บันทึกเพจ</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>📄 รายการเพจ (<span id="page-count">0</span>)</h2>
+          </div>
+          <div class="card-body" id="pages-list">
+            <div class="empty-state">
+              <p>ยังไม่มีเพจที่เชื่อมต่อ</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto Reply Page -->
+      <div id="page-auto-reply" class="page">
+        <div class="page-header">
+          <h1>💬 ตอบกลับอัตโนมัติ</h1>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>ตั้งค่าคำตอบอัตโนมัติ</h2>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-reply-toggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>ข้อความต้อนรับ</label>
+              <textarea id="welcome-message" rows="3" placeholder="สวัสดีค่ะ ยินดีต้อนรับ มีอะไรให้ช่วยไหมคะ?">สวัสดีค่ะ ยินดีต้อนรับ มีอะไรให้ช่วยไหมคะ?</textarea>
+            </div>
+            <div class="form-group">
+              <label>คำตอบเมื่อไม่เข้าใจ</label>
+              <textarea id="fallback-message" rows="3" placeholder="ขออภัยค่ะ ไม่เข้าใจที่พิมพ์มา ลองใหม่อีกครั้งนะคะ">ขออภัยค่ะ ไม่เข้าใจที่พิมพ์มา ลองใหม่อีกครั้งนะคะ</textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Keyword → คำตอบ</h2>
+            <button class="btn btn-primary btn-sm" onclick="addKeyword()">+ เพิ่ม</button>
+          </div>
+          <div class="card-body">
+            <div id="keyword-list">
+              <!-- Keywords will be loaded from server -->
+            </div>
+            <div style="margin-top: 16px; text-align: center;">
+              <button class="btn btn-primary" onclick="saveKeywords()">💾 บันทึกการตั้งค่า</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Broadcast Page -->
+      <div id="page-broadcast" class="page">
+        <div class="page-header">
+          <h1>📢 ส่งข้อความ</h1>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>ส่งข้อความถึงผู้ใช้</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>User ID ของผู้รับ</label>
+              <input type="text" id="broadcast-user-id" placeholder="ใส่ User ID ของผู้ใช้ Facebook">
+            </div>
+            <div class="form-group">
+              <label>ข้อความ</label>
+              <textarea id="broadcast-message" rows="5" placeholder="พิมพ์ข้อความที่ต้องการส่ง..."></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="sendBroadcast()">📤 ส่งข้อความ</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs Page -->
+      <div id="page-logs" class="page">
+        <div class="page-header">
+          <h1>📋 ประวัติข้อความ</h1>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>ข้อความล่าสุด</h2>
+            <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🗑️ ล้าง</button>
+          </div>
+          <div class="card-body" id="message-logs">
+            <div class="empty-state">
+              <p>ยังไม่มีประวัติข้อความ</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Webhook Page -->
+      <div id="page-webhook" class="page">
+        <div class="page-header">
+          <h1>🔗 ตั้งค่า Webhook</h1>
+        </div>
+
+        <div class="card">
+          <div class="card-header blue-header">
+            <h2>ข้อมูล Webhook</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Callback URL</label>
+              <div class="input-with-btn">
+                <input type="text" id="webhook-url" readonly value="https://my-chatbot-1-2cuw.onrender.com/webhook">
+                <button class="btn btn-secondary" onclick="copyWebhook()">📋 คัดลอก</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Verify Token</label>
+              <div class="input-with-btn">
+                <input type="text" id="verify-token" readonly value="my_verify_token">
+                <button class="btn btn-secondary" onclick="copyVerifyToken()">📋 คัดลอก</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>📝 วิธีตั้งค่า</h2>
+          </div>
+          <div class="card-body">
+            <ol class="steps-list">
+              <li>ไปที่ <strong>Facebook App Dashboard</strong> → Messenger → Settings</li>
+              <li>เลื่อนไปส่วน <strong>Webhooks</strong></li>
+              <li>คลิก <strong>"Callback URL"</strong> แล้ววาง URL ด้านบน</li>
+              <li>ใส่ <strong>Verify Token: my_verify_token</strong></li>
+              <li>คลิก <strong>"Verify and Save"</strong></li>
+              <li>ติ๊กเลือก events: <strong>messages</strong> และ <strong>messaging_postbacks</strong></li>
+              <li>กลับมาที่นี่แล้วกด <strong>🧪 ทดสอบ Webhook</strong></li>
+            </ol>
+            <br>
+            <button class="btn btn-primary" onclick="testWebhook()">🧪 ทดสอบ Webhook</button>
+            <span id="webhook-test-result"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Page -->
+      <div id="page-settings" class="page">
+        <div class="page-header">
+          <h1>⚙️ ตั้งค่า</h1>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>ตั้งค่าทั่วไป</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>ชื่อแอปพลิเคชัน</label>
+              <input type="text" value="Facebook Chatbot Manager">
+            </div>
+            <div class="form-group">
+              <label>พอร์ต Webhook Server</label>
+              <input type="number" value="3000">
+            </div>
+            <div class="form-group">
+              <label>Webhook URL (Render)</label>
+              <input type="text" id="render-url" placeholder="https://your-app.onrender.com/webhook" value="https://my-chatbot-1-2cuw.onrender.com/webhook">
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()">💾 บันทึกตั้งค่า</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>เกี่ยวกับ</h2>
+          </div>
+          <div class="card-body">
+            <p><strong>Facebook Chatbot Manager</strong> v1.0.0</p>
+            <p>แอปพลิเคชันสำหรับจัดการแชทบอท Facebook Page</p>
+            <p>Powered by Electron + Node.js</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
