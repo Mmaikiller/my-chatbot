@@ -15,7 +15,7 @@ GITHUB_FILE = 'settings.json'
 GITHUB_BRANCH = 'master'
 
 DEFAULT_SETTINGS = {
-    "welcome": "สวัสดีครับ ยินดีต้อนรับ มีอะไรให้ช่วยไหมครับ?",
+    "welcome": "สวัสดีครับ 🙏 ยินดีต้อนรับครับ ร้านสหวัฒน์ จำหน่ายวัสดุก่อสร้างทุกชนิดครับ\n\nต้องการสินค้าอะไร หรือมีคำถามอะไร ทักมาได้เลยครับ!",
     "keywords": {},
     "welcomed_users": []
 }
@@ -39,9 +39,6 @@ def load_settings_from_github():
                 settings = data
             if "welcomed_users" not in settings:
                 settings["welcomed_users"] = []
-            print(f"Loaded settings: {json.dumps(settings, ensure_ascii=False)[:200]}")
-        else:
-            print(f"GitHub load failed: {r.status_code}")
     except Exception as e:
         print(f"Error loading from GitHub: {e}")
 
@@ -59,13 +56,11 @@ def save_settings_to_github():
         if sha:
             data["sha"] = sha
         r = requests.put(url, headers=headers, json=data, timeout=10)
-        print(f"GitHub save: {r.status_code}")
         return r.status_code in [200, 201]
     except Exception as e:
         print(f"Error saving to GitHub: {e}")
         return False
 
-# Load on startup
 load_settings_from_github()
 
 @app.route('/')
@@ -78,57 +73,45 @@ def verify():
     token = request.args.get('hub.verify_token')
     challenge = request.args.get('hub.challenge')
     if mode == 'subscribe' and token == VERIFY_TOKEN:
-        print("Webhook verified!")
         return challenge, 200
     return 'Forbidden', 403
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
-    print(f"Webhook received: {json.dumps(data, ensure_ascii=False)[:300]}")
+    print(f"Webhook: {json.dumps(data, ensure_ascii=False)[:300]}")
 
     if data.get('object') == 'page':
         for entry in data.get('entry', []):
             for event in entry.get('messaging', []):
                 sender = event['sender']['id']
 
-                # ดึง text จาก message หรือ postback
-                text = ''
-                if 'message' in event:
-                    text = event['message'].get('text', '')
-                elif 'postback' in event:
-                    text = event['postback'].get('payload', '')
-
-                # โหลด settings ล่าสุดจาก GitHub
+                # โหลด settings ล่าสุด
                 load_settings_from_github()
 
-                # เช็คว่าเคยต้อนรับแล้วหรือยัง
-                welcomed = settings.get("welcomed_users", [])
+                # ตรวจสอบว่ามี postback หรือไม่ (Get Started / ปุ่มอื่นๆ)
+                if 'postback' in event:
+                    payload = event['postback'].get('payload', '')
+                    title = event['postback'].get('title', '')
+                    print(f"Postback from {sender}: payload={payload}, title={title}")
 
-                if sender not in welcomed:
-                    # ครั้งแรก → ส่งข้อความต้อนรับก่อน
-                    welcome_msg = settings.get("welcome", "สวัสดีครับ!")
-                    send_message(sender, welcome_msg)
-                    welcomed.append(sender)
-                    settings["welcomed_users"] = welcomed
-                    save_settings_to_github()
-                    print(f"Welcome sent to {sender}")
-
-                    # ถ้ามีข้อความแนบมาด้วย ตอบด้วย keyword
-                    if text:
-                        reply = get_reply(text)
+                    # ส่งข้อความต้อนรับเมื่อกด Get Started
+                    if payload == 'GET_STARTED' or title == 'Get Started':
+                        send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
+                    else:
+                        # Postback อื่นๆ → ค้นหาจาก keyword
+                        reply = get_reply(payload)
                         if reply:
                             send_message(sender, reply)
-                else:
-                    # ไม่ใช่ครั้งแรก → ตอบตาม keyword
+
+                # ตรวจสอบข้อความ
+                elif 'message' in event:
+                    text = event['message'].get('text', '')
+                    print(f"Message from {sender}: {text}")
+
                     if text:
                         reply = get_reply(text)
                         send_message(sender, reply)
-                    elif 'postback' in event:
-                        # Postback ที่ไม่ใช่ Get Started
-                        reply = get_reply(text)
-                        if reply:
-                            send_message(sender, reply)
 
         return 'OK', 200
     return 'OK', 200
@@ -143,14 +126,14 @@ def get_reply(text):
         if keyword.lower() in text_lower:
             return answer
 
-    # Fuzzy match หาคำคล้าย
+    # Fuzzy match
     keywords_list = list(settings.get("keywords", {}).keys())
     if keywords_list:
         close = get_close_matches(text_lower, keywords_list, n=1, cutoff=0.5)
         if close:
             return settings["keywords"][close[0]]
 
-    # ไม่เจอ → ตอบ welcome แทน
+    # ไม่เจอ → ตอบ welcome
     return settings.get("welcome", "สวัสดีครับ!")
 
 def send_message(recipient_id, text):
@@ -175,7 +158,6 @@ def get_settings():
 def update_settings():
     global settings
     new_settings = request.get_json()
-    # ไม่ให้ Desktop App ลบ welcomed_users
     if "welcomed_users" not in new_settings:
         new_settings["welcomed_users"] = settings.get("welcomed_users", [])
     settings.update(new_settings)
@@ -210,11 +192,10 @@ def get_keywords():
 
 @app.route('/api/reset-welcomed', methods=['POST'])
 def reset_welcomed():
-    """รีเซ็ตรายชื่อผู้ใช้ที่เคยต้อนรับแล้ว (ใช้ทดสอบ)"""
     global settings
     settings["welcomed_users"] = []
     save_settings_to_github()
-    return jsonify({"success": True, "message": "Reset welcomed_users"})
+    return jsonify({"success": True})
 
 if __name__ == '__main__':
     app.run(port=5000)
