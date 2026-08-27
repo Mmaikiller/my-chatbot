@@ -13,9 +13,9 @@ let messageLogs = [];
 
 function showPage(pageName) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById(`page-${pageName}`).classList.add('active');
+  document.getElementById('page-' + pageName).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelector(`[data-page="${pageName}"]`).classList.add('active');
+  document.querySelector('[data-page="' + pageName + '"]').classList.add('active');
   if (pageName === 'auto-reply') loadKeywords();
 }
 
@@ -25,26 +25,26 @@ function closeWindow() {
   if (confirm('ต้องการปิดแอปพลิเคชัน?')) window.close();
 }
 
-function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
+function showToast(message, type) {
+  var toast = document.createElement('div');
+  toast.className = 'toast ' + (type || 'info');
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  setTimeout(function() { toast.remove(); }, 3000);
 }
 
 // ========== Pages ==========
 async function addPage() {
-  const tokenInput = document.getElementById('page-token-input');
-  const token = tokenInput.value.trim();
+  var tokenInput = document.getElementById('page-token-input');
+  var token = tokenInput.value.trim();
   if (!token) { showToast('กรุณาใส่ Page Access Token', 'error'); return; }
   try {
-    const result = await ipcRenderer.invoke('add-page', { token });
+    var result = await ipcRenderer.invoke('add-page', { token: token });
     if (result.success) {
       pages.push(result.page);
       renderPages();
       tokenInput.value = '';
-      showToast(`เพิ่มเพจ "${result.page.name}" สำเร็จ!`, 'success');
+      showToast('เพิ่มเพจสำเร็จ!', 'success');
     } else {
       showToast(result.error || 'Token ไม่ถูกต้อง', 'error');
     }
@@ -55,14 +55,14 @@ async function addPage() {
 
 async function removePage(pageId) {
   if (confirm('ต้องการลบเพจนี้?')) {
-    pages = pages.filter(p => p.id !== pageId);
+    pages = pages.filter(function(p) { return p.id !== pageId; });
     renderPages();
     showToast('ลบเพจสำเร็จ', 'success');
   }
 }
 
 async function activatePage(pageId) {
-  pages.forEach(p => p.active = (p.id === pageId));
+  pages.forEach(function(p) { p.active = (p.id === pageId); });
   renderPages();
 }
 
@@ -72,39 +72,36 @@ function pasteToken() {
 }
 
 function renderPages() {
-  const pagesList = document.getElementById('pages-list');
-  const pagesListDashboard = document.getElementById('pages-list-dashboard');
-  const pageCount = document.getElementById('page-count');
-  const totalPages = document.getElementById('total-pages');
+  var pagesList = document.getElementById('pages-list');
+  var pagesListDashboard = document.getElementById('pages-list-dashboard');
+  var pageCount = document.getElementById('page-count');
+  var totalPages = document.getElementById('total-pages');
   pageCount.textContent = pages.length;
   totalPages.textContent = pages.length;
   if (pages.length === 0) {
-    const emptyHtml = '<div class="empty-state"><p>ยังไม่มีเพจที่เชื่อมต่อ</p></div>';
+    var emptyHtml = '<div class="empty-state"><p>ยังไม่มีเพจที่เชื่อมต่อ</p></div>';
     pagesList.innerHTML = emptyHtml;
     pagesListDashboard.innerHTML = emptyHtml;
     return;
   }
-  let html = '';
-  pages.forEach(page => {
-    const initials = page.name.charAt(0);
-    const badgeClass = page.active ? 'badge-active' : 'badge-inactive';
-    const activeClass = page.active ? 'active-page' : '';
-    html += `
-      <div class="page-card ${activeClass}">
-        <div class="page-card-info">
-          <div class="page-card-avatar">${initials}</div>
-          <div class="page-card-details">
-            <h3>${page.name} <span class="badge ${badgeClass}">${page.active ? '✅ ใช้งาน' : '⏳ ไม่ใช้งาน'}</span></h3>
-            <small>Page ID: ${page.id}</small><br>
-            <small>Access Token: ${page.token.substring(0, 20)}...${page.token.slice(-5)}</small>
-          </div>
-        </div>
-        <div class="page-card-actions">
-          ${!page.active ? `<button class="btn btn-primary btn-sm" onclick="activatePage('${page.id}')">✅ เลือก</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="removePage('${page.id}')">🗑️ ลบ</button>
-        </div>
-      </div>
-    `;
+  var html = '';
+  pages.forEach(function(page) {
+    var initials = page.name.charAt(0);
+    var badgeClass = page.active ? 'badge-active' : 'badge-inactive';
+    var activeClass = page.active ? 'active-page' : '';
+    html += '<div class="page-card ' + activeClass + '">';
+    html += '<div class="page-card-info">';
+    html += '<div class="page-card-avatar">' + initials + '</div>';
+    html += '<div class="page-card-details">';
+    html += '<h3>' + page.name + ' <span class="badge ' + badgeClass + '">' + (page.active ? 'ใช้งาน' : 'ไม่ใช้งาน') + '</span></h3>';
+    html += '<small>Page ID: ' + page.id + '</small>';
+    html += '</div></div>';
+    html += '<div class="page-card-actions">';
+    if (!page.active) {
+      html += '<button class="btn btn-primary btn-sm" onclick="activatePage(\'' + page.id + '\')">เลือก</button> ';
+    }
+    html += '<button class="btn btn-danger btn-sm" onclick="removePage(\'' + page.id + '\')">ลบ</button>';
+    html += '</div></div>';
   });
   pagesList.innerHTML = html;
   pagesListDashboard.innerHTML = html;
@@ -113,32 +110,30 @@ function renderPages() {
 // ========== Auto Reply ==========
 async function loadKeywords() {
   try {
-    const response = await fetch(`${RENDER_URL}/api/settings`);
-    const data = await response.json();
-    
+    var response = await fetch(RENDER_URL + '/api/settings');
+    var data = await response.json();
     document.getElementById('welcome-message').value = data.welcome || '';
-    
-    const keywordList = document.getElementById('keyword-list');
+    var keywordList = document.getElementById('keyword-list');
     keywordList.innerHTML = '';
-    
-    for (const [keyword, answer] of Object.entries(data.keywords || {})) {
-      addKeywordRow(keyword, answer);
+    var keys = Object.keys(data.keywords || {});
+    for (var i = 0; i < keys.length; i++) {
+      addKeywordRow(keys[i], data.keywords[keys[i]]);
     }
   } catch (error) {
     console.error('Error loading:', error);
   }
 }
 
-function addKeywordRow(keyword = '', answer = '') {
-  const keywordList = document.getElementById('keyword-list');
-  const item = document.createElement('div');
+function addKeywordRow(keyword, answer) {
+  keyword = keyword || '';
+  answer = answer || '';
+  var keywordList = document.getElementById('keyword-list');
+  var item = document.createElement('div');
   item.className = 'keyword-item';
-  item.innerHTML = `
-    <input type="text" class="keyword-input" placeholder="คำหลัก" value="${keyword}">
-    <span class="keyword-arrow">→</span>
-    <input type="text" class="reply-input" placeholder="คำตอบ" value="${answer}">
-    <button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">🗑️</button>
-  `;
+  item.innerHTML = '<input type="text" class="keyword-input" placeholder="คำหลัก" value="' + keyword + '">' +
+    '<span class="keyword-arrow">\u2192</span>' +
+    '<input type="text" class="reply-input" placeholder="คำตอบ" value="' + answer + '">' +
+    '<button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">\uD83D\uDDD1\uFE0F</button>';
   keywordList.appendChild(item);
 }
 
@@ -146,34 +141,27 @@ function addKeyword() {
   addKeywordRow();
 }
 
-// ========== บันทึกทุกอย่างลง GitHub ==========
 async function saveKeywords() {
-  const keywordItems = document.querySelectorAll('.keyword-item');
-  const keywords = {};
-  
-  keywordItems.forEach(item => {
-    const keyword = item.querySelector('.keyword-input').value.trim();
-    const answer = item.querySelector('.reply-input').value.trim();
-    if (keyword && answer) {
-      keywords[keyword] = answer;
-    }
+  var keywordItems = document.querySelectorAll('.keyword-item');
+  var keywords = {};
+  keywordItems.forEach(function(item) {
+    var kw = item.querySelector('.keyword-input').value.trim();
+    var ans = item.querySelector('.reply-input').value.trim();
+    if (kw && ans) { keywords[kw] = ans; }
   });
-  
-  const payload = {
+  var payload = {
     welcome: document.getElementById('welcome-message').value.trim(),
     keywords: keywords
   };
-  
   try {
-    const response = await fetch(`${RENDER_URL}/api/settings`, {
+    var response = await fetch(RENDER_URL + '/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
-    const result = await response.json();
+    var result = await response.json();
     if (result.success) {
-      showToast('บันทึกสำเร็จ! (เก็บบน GitHub แล้ว)', 'success');
+      showToast('บันทึกสำเร็จ!', 'success');
     } else {
       showToast('เกิดข้อผิดพลาด', 'error');
     }
@@ -183,16 +171,14 @@ async function saveKeywords() {
 }
 
 async function sendBroadcast() {
-  const userId = document.getElementById('broadcast-user-id').value.trim();
-  const message = document.getElementById('broadcast-message').value.trim();
+  var userId = document.getElementById('broadcast-user-id').value.trim();
+  var message = document.getElementById('broadcast-message').value.trim();
   if (!userId) { showToast('กรุณาใส่ User ID', 'error'); return; }
   if (!message) { showToast('กรุณาใส่ข้อความ', 'error'); return; }
   try {
-    const result = await ipcRenderer.invoke('send-message', { recipientId: userId, text: message });
-    if (result.success !== false) {
-      showToast('ส่งข้อความสำเร็จ!', 'success');
-      document.getElementById('broadcast-message').value = '';
-    }
+    var result = await ipcRenderer.invoke('send-message', { recipientId: userId, text: message });
+    showToast('ส่งข้อความสำเร็จ!', 'success');
+    document.getElementById('broadcast-message').value = '';
   } catch (error) {
     showToast('เกิดข้อผิดพลาด', 'error');
   }
@@ -209,17 +195,17 @@ function copyVerifyToken() {
 }
 
 async function testWebhook() {
-  const resultEl = document.getElementById('webhook-test-result');
+  var resultEl = document.getElementById('webhook-test-result');
   resultEl.textContent = ' กำลังทดสอบ...';
   try {
-    const response = await fetch(`${RENDER_URL}/`);
+    var response = await fetch(RENDER_URL + '/');
     if (response.ok) {
-      resultEl.innerHTML = ' <span style="color: green;">✅ ทำงานปกติ!</span>';
+      resultEl.innerHTML = ' <span style="color: green;">ทำงานปกติ!</span>';
     } else {
-      resultEl.innerHTML = ' <span style="color: red;">❌ ไม่ตอบสนอง</span>';
+      resultEl.innerHTML = ' <span style="color: red;">ไม่ตอบสนอง</span>';
     }
   } catch (error) {
-    resultEl.innerHTML = ' <span style="color: red;">❌ เชื่อมต่อไม่ได้</span>';
+    resultEl.innerHTML = ' <span style="color: red;">เชื่อมต่อไม่ได้</span>';
   }
 }
 
@@ -233,19 +219,28 @@ function clearLogs() {
 }
 
 function renderLogs() {
-  const logsEl = document.getElementById('message-logs');
-  const totalMessages = document.getElementById('total-messages');
+  var logsEl = document.getElementById('message-logs');
+  var totalMessages = document.getElementById('total-messages');
   totalMessages.textContent = messageLogs.length;
   if (messageLogs.length === 0) {
     logsEl.innerHTML = '<div class="empty-state"><p>ยังไม่มีประวัติข้อความ</p></div>';
     return;
   }
-  let html = '';
-  messageLogs.slice().reverse().forEach(log => {
-    const initials = log.sender.substring(0, 2);
-    const time = new Date(log.time).toLocaleString('th-TH');
-    html += `
-      <div class="log-item">
-        <div class="log-avatar">${initials}</div>
-        <div class="log-content">
-          <div class="log-sender">U
+  var html = '';
+  messageLogs.slice().reverse().forEach(function(log) {
+    var initials = log.sender.substring(0, 2);
+    var time = new Date(log.time).toLocaleString('th-TH');
+    html += '<div class="log-item"><div class="log-avatar">' + initials + '</div>';
+    html += '<div class="log-content"><div class="log-sender">User: ' + log.sender + '</div>';
+    html += '<div class="log-text">' + log.text + '</div>';
+    html += '<div class="log-time">' + time + '</div></div></div>';
+  });
+  logsEl.innerHTML = html;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  renderPages();
+  renderLogs();
+  document.getElementById('webhook-status').textContent = 'เชื่อมต่อแล้ว';
+  document.getElementById('bot-status').textContent = 'เปิดอยู่';
+});
