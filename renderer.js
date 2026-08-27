@@ -8,14 +8,19 @@ try {
 
 const RENDER_URL = 'https://my-chatbot-1-2cuw.onrender.com';
 
-let pages = [];
+let pages = JSON.parse(localStorage.getItem('chatbot_pages') || '[]');
 let messageLogs = [];
+
+function saveLocalPages() {
+  localStorage.setItem('chatbot_pages', JSON.stringify(pages));
+}
 
 function showPage(pageName) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageName).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector('[data-page="' + pageName + '"]').classList.add('active');
+  if (pageName === 'dashboard') renderPages();
   if (pageName === 'auto-reply') loadKeywords();
 }
 
@@ -42,6 +47,7 @@ async function addPage() {
     var result = await ipcRenderer.invoke('add-page', { token: token });
     if (result.success) {
       pages.push(result.page);
+      saveLocalPages();
       renderPages();
       tokenInput.value = '';
       showToast('เพิ่มเพจสำเร็จ!', 'success');
@@ -56,6 +62,7 @@ async function addPage() {
 async function removePage(pageId) {
   if (confirm('ต้องการลบเพจนี้?')) {
     pages = pages.filter(function(p) { return p.id !== pageId; });
+    saveLocalPages();
     renderPages();
     showToast('ลบเพจสำเร็จ', 'success');
   }
@@ -63,6 +70,7 @@ async function removePage(pageId) {
 
 async function activatePage(pageId) {
   pages.forEach(function(p) { p.active = (p.id === pageId); });
+  saveLocalPages();
   renderPages();
 }
 
@@ -81,7 +89,7 @@ function renderPages() {
   if (pages.length === 0) {
     var emptyHtml = '<div class="empty-state"><p>ยังไม่มีเพจที่เชื่อมต่อ</p></div>';
     pagesList.innerHTML = emptyHtml;
-    pagesListDashboard.innerHTML = emptyHtml;
+    if (pagesListDashboard) pagesListDashboard.innerHTML = emptyHtml;
     return;
   }
   var html = '';
@@ -104,11 +112,24 @@ function renderPages() {
     html += '</div></div>';
   });
   pagesList.innerHTML = html;
-  pagesListDashboard.innerHTML = html;
+  if (pagesListDashboard) pagesListDashboard.innerHTML = html;
 }
 
 // ========== Auto Reply ==========
 async function loadKeywords() {
+  // โหลดจาก localStorage ก่อน (ทันที)
+  var localSettings = JSON.parse(localStorage.getItem('chatbot_settings') || 'null');
+  if (localSettings) {
+    document.getElementById('welcome-message').value = localSettings.welcome || '';
+    var keywordList = document.getElementById('keyword-list');
+    keywordList.innerHTML = '';
+    var keys = Object.keys(localSettings.keywords || {});
+    for (var i = 0; i < keys.length; i++) {
+      addKeywordRow(keys[i], localSettings.keywords[keys[i]]);
+    }
+  }
+
+  // แล้วโหลดจาก Server มา sync
   try {
     var response = await fetch(RENDER_URL + '/api/settings');
     var data = await response.json();
@@ -119,8 +140,11 @@ async function loadKeywords() {
     for (var i = 0; i < keys.length; i++) {
       addKeywordRow(keys[i], data.keywords[keys[i]]);
     }
+    // บันทึกลง localStorage ด้วย
+    localStorage.setItem('chatbot_settings', JSON.stringify(data));
   } catch (error) {
-    console.error('Error loading:', error);
+    console.error('Error loading from server:', error);
+    // ใช้ localStorage เป็น fallback
   }
 }
 
@@ -153,6 +177,12 @@ async function saveKeywords() {
     welcome: document.getElementById('welcome-message').value.trim(),
     keywords: keywords
   };
+
+  // บันทึกลง localStorage ทันที (ไม่ต้องรอ server)
+  localStorage.setItem('chatbot_settings', JSON.stringify(payload));
+  showToast('บันทึกลงเครื่องแล้ว!', 'success');
+
+  // ส่งไปที่ Render Server (บันทึกลง GitHub)
   try {
     var response = await fetch(RENDER_URL + '/api/settings', {
       method: 'POST',
@@ -161,12 +191,12 @@ async function saveKeywords() {
     });
     var result = await response.json();
     if (result.success) {
-      showToast('บันทึกสำเร็จ!', 'success');
+      showToast('บันทึกขึ้น Server แล้ว!', 'success');
     } else {
-      showToast('เกิดข้อผิดพลาด', 'error');
+      showToast('บันทึกลงเครื่องแล้ว (Server ยังไม่ได้)', 'info');
     }
   } catch (error) {
-    showToast('เกิดข้อผิดพลาด: ' + error.message, 'error');
+    showToast('บันทึกลงเครื่องแล้ว (Server ยังไม่ได้)', 'info');
   }
 }
 
