@@ -22,40 +22,35 @@ DEFAULT_SETTINGS = {
 
 settings = dict(DEFAULT_SETTINGS)
 
-# ========== หมวดหมู่ ==========
 CATEGORIES = {
     "แจ้งปัญหา": [
-        "ปัญหา", "เสีย", "พัง", "ชำรุด", "ไม่ทำงาน", "ผิดพลาด", "error",
-        " complain", "ร้องเรียน", "บ่น", "ไม่พอใจ", "ผิดหวัง", "แย่",
-        "ส่งของช้า", "ของไม่มา", "ไม่ได้ของ", "สูญหาย", "หาย", "ชำรุด",
-        "เปลี่ยน", "คืน", "refund", "return", "แจ้งปัญหา", "ช่วยแก้"
+        "ปัญหา", "เสีย", "พัง", "ชำรุด", "ไม่ทำงาน", "ผิดพลาด",
+        "ร้องเรียน", "บ่น", "ไม่พอใจ", "แย่",
+        "ส่งของช้า", "ของไม่มา", "ไม่ได้ของ", "สูญหาย", "หาย",
+        "เปลี่ยน", "คืน", " refund", " return", "แจ้งปัญหา", "ช่วยแก้"
     ],
     "สั่งซื้อ": [
         "สั่ง", "ซื้อ", "order", "buy", "อยากได้", "สนใจ", "จอง",
-        "เท่าไหร่", "ราคา", "กี่บาท", "กี่钱", "เงิน", "จ่าย",
+        "เท่าไหร่", "ราคา", "กี่บาท", "เงิน", "จ่าย",
         "ส่ง", "จัดส่ง", "delivery", "ship", "รอบหน้า", "เพิ่ม",
-        "size", "ไซส์", "เบอร์", "สี", "แบบ", "รุ่น", "SKU"
+        "size", "ไซส์", "เบอร์", "สี", "แบบ", "รุ่น"
     ],
     "สอบถาม": [
         "สอบถาม", "ถาม", "อยากถาม", "ข้อมูล", "รายละเอียด",
         "เวลาเปิด", "เวลาปิด", "ที่อยู่", "ติดต่อ", "เบอร์โทร",
         "เปิดกี่โมง", "ปิดกี่โมง", "อยู่ที่ไหน", "ไปยังไง",
         "มีไหม", "มีสินค้า", "stock", "สต็อก", "เหลือ", "หมด",
-        "how", "what", "where", "when", "who", "ทำไม", "ยังไง", "อะไร"
+        "how", "what", "where", "when", "ทำไม", "ยังไง", "อะไร"
     ]
 }
 
 def classify_message(text):
-    """จำแนกหมวดหมู่ข้อความ"""
     if not text:
         return "สอบถาม"
     text_lower = text.lower().strip()
     scores = {}
     for category, keywords in CATEGORIES.items():
-        score = 0
-        for keyword in keywords:
-            if keyword.lower() in text_lower:
-                score += 1
+        score = sum(1 for kw in keywords if kw.lower() in text_lower)
         scores[category] = score
     if max(scores.values()) > 0:
         return max(scores, key=scores.get)
@@ -67,8 +62,8 @@ def load_settings_from_github():
     if not GITHUB_TOKEN:
         return
     try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        url = "https://api.github.com/repos/{}/contents/{}".format(GITHUB_REPO, GITHUB_FILE)
+        headers = {"Authorization": "token {}".format(GITHUB_TOKEN), "Accept": "application/vnd.github.v3+json"}
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             content = r.json().get("content", "")
@@ -79,17 +74,16 @@ def load_settings_from_github():
             if "chat_logs" not in settings:
                 settings["chat_logs"] = []
     except Exception as e:
-        print(f"Error loading from GitHub: {e}")
+        print("Error loading from GitHub: {}".format(e))
 
 def save_settings_to_github():
     if not GITHUB_TOKEN:
         return False
     try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        url = "https://api.github.com/repos/{}/contents/{}".format(GITHUB_REPO, GITHUB_FILE)
+        headers = {"Authorization": "token {}".format(GITHUB_TOKEN), "Accept": "application/vnd.github.v3+json"}
         r = requests.get(url, headers=headers, timeout=10)
         sha = r.json().get("sha", "") if r.status_code == 200 else ""
-        # เก็บแค่ 100 แชทล่าสุด (ไม่ให้ไฟล์ใหญ่เกินไป)
         if "chat_logs" in settings and len(settings["chat_logs"]) > 100:
             settings["chat_logs"] = settings["chat_logs"][-100:]
         content = json.dumps(settings, ensure_ascii=False, indent=2)
@@ -100,7 +94,7 @@ def save_settings_to_github():
         r = requests.put(url, headers=headers, json=data, timeout=10)
         return r.status_code in [200, 201]
     except Exception as e:
-        print(f"Error saving to GitHub: {e}")
+        print("Error saving to GitHub: {}".format(e))
         return False
 
 load_settings_from_github()
@@ -121,20 +115,18 @@ def verify():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
-    print(f"Webhook: {json.dumps(data, ensure_ascii=False)[:300]}")
 
     if data.get('object') == 'page':
         for entry in data.get('entry', []):
             for event in entry.get('messaging', []):
                 sender = event['sender']['id']
-
                 load_settings_from_github()
 
-                # Postback (Get Started / ปุ่มอื่นๆ)
+                # Postback (Get Started)
                 if 'postback' in event:
                     payload = event['postback'].get('payload', '')
                     title = event['postback'].get('title', '')
-                    print(f"Postback from {sender}: payload={payload}")
+                    print("Postback from {}: payload={}".format(sender, payload))
 
                     if payload == 'GET_STARTED' or title == 'Get Started':
                         send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
@@ -143,72 +135,47 @@ def webhook():
                         reply = get_reply(payload)
                         if reply:
                             send_message(sender, reply)
-                            category = classify_message(payload)
-                            log_chat(sender, payload, category)
+                            log_chat(sender, payload, classify_message(payload))
 
                 # ข้อความ
                 elif 'message' in event:
                     text = event['message'].get('text', '')
-                    print(f"Message from {sender}: {text}")
-
                     if text:
-                        # จำแนกหมวดหมู่
                         category = classify_message(text)
-                        print(f"Category: {category}")
-
-                        # บันทึกแชท
                         log_chat(sender, text, category)
-
-                        # ตอบกลับ
                         reply = get_reply(text)
-                        send_message(sender, reply)
-
-                        # แจ้งเตือนถ้าเป็นปัญหา
+                        if reply:
+                            send_message(sender, reply)
                         if category == "แจ้งปัญหา":
-                            notify_owner(sender, text)
+                            print("ALERT: แจ้งปัญหาจาก {}: {}".format(sender, text))
 
         return 'OK', 200
     return 'OK', 200
 
 def log_chat(sender_id, text, category):
-    """บันทึกแชทพร้อมหมวดหมู่"""
+    import datetime
     chat_log = {
         "sender": sender_id,
         "text": text,
         "category": category,
-        "time": __import__('datetime').datetime.now().isoformat()
+        "time": datetime.datetime.now().isoformat()
     }
     settings.setdefault("chat_logs", []).append(chat_log)
     save_settings_to_github()
-
-def notify_owner(sender_id, text):
-    """แจ้งเตือนเจ้าของเพจเมื่อมีปัญหา"""
-    notify_msg = f"⚠️ แจ้งปัญหาจากลูกค้า!\n\nลูกค้า: {sender_id}\nข้อความ: {text}\n\nหมวดหมู่: แจ้งปัญหา"
-    # ส่งถึงผู้ดูแล (ใช้ Page Access Token)
-    url = "https://graph.facebook.com/v19.0/me/messages"
-    # ถ้าต้องการส่งถึง admin ให้ใส่ admin PSID
-    # payload = {"recipient": {"id": "ADMIN_PSID"}, "message": {"text": notify_msg}, "access_token": PAGE_ACCESS_TOKEN}
-    # requests.post(url, json=payload, timeout=10)
-    print(f"ALERT: {notify_msg}")
 
 def get_reply(text):
     if not text:
         return None
     text_lower = text.lower().strip()
-
-    # ค้นหา keyword ตรงๆ
     for keyword, answer in settings.get("keywords", {}).items():
         if keyword.lower() in text_lower:
             return answer
-
-    # Fuzzy match
     keywords_list = list(settings.get("keywords", {}).keys())
     if keywords_list:
         close = get_close_matches(text_lower, keywords_list, n=1, cutoff=0.5)
         if close:
             return settings["keywords"][close[0]]
-
-    return settings.get("welcome", "สวัสดีครับ!")
+    return None
 
 def send_message(recipient_id, text):
     url = "https://graph.facebook.com/v19.0/me/messages"
@@ -219,17 +186,17 @@ def send_message(recipient_id, text):
     }
     try:
         r = requests.post(url, json=payload, timeout=10)
-        print(f"Sent to {recipient_id}: {r.status_code}")
+        print("Sent to {}: {}".format(recipient_id, r.status_code))
     except Exception as e:
-        print(f"Send error: {e}")
+        print("Send error: {}".format(e))
 
 @app.route('/api/settings', methods=['GET'])
-def get_settings():
+def api_get_settings():
     load_settings_from_github()
     return jsonify(settings)
 
 @app.route('/api/settings', methods=['POST'])
-def update_settings():
+def api_update_settings():
     global settings
     new_settings = request.get_json()
     settings.update(new_settings)
@@ -237,19 +204,19 @@ def update_settings():
     return jsonify({"success": True, "settings": settings})
 
 @app.route('/api/chat-logs', methods=['GET'])
-def get_chat_logs():
+def api_get_chat_logs():
     load_settings_from_github()
     return jsonify(settings.get("chat_logs", []))
 
 @app.route('/api/chat-logs', methods=['DELETE'])
-def clear_chat_logs():
+def api_clear_chat_logs():
     global settings
     settings["chat_logs"] = []
     save_settings_to_github()
     return jsonify({"success": True})
 
 @app.route('/api/keywords', methods=['POST'])
-def add_keyword():
+def api_add_keyword():
     data = request.get_json()
     keyword = data.get('keyword')
     answer = data.get('answer')
@@ -260,7 +227,7 @@ def add_keyword():
     return jsonify({"success": False}), 400
 
 @app.route('/api/keywords', methods=['DELETE'])
-def delete_keyword():
+def api_delete_keyword():
     data = request.get_json()
     keyword = data.get('keyword')
     if keyword and keyword in settings.get("keywords", {}):
@@ -270,16 +237,9 @@ def delete_keyword():
     return jsonify({"success": False}), 404
 
 @app.route('/api/keywords', methods=['GET'])
-def get_keywords():
+def api_get_keywords():
     load_settings_from_github()
     return jsonify(settings.get("keywords", {}))
-
-@app.route('/api/reset-welcomed', methods=['POST'])
-def reset_welcomed():
-    global settings
-    settings["welcomed_users"] = []
-    save_settings_to_github()
-    return jsonify({"success": True})
 
 if __name__ == '__main__':
     app.run(port=5000)
