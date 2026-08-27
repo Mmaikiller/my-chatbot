@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+from difflib import get_close_matches
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -16,13 +17,21 @@ DEFAULT_SETTINGS = {
     "welcome": "สวัสดีครับ ยินดีต้อนรับ มีอะไรให้ช่วยไหมครับ?",
     "keywords": {
         "สวัสดี": "สวัสดีครับ มีอะไรให้ช่วยไหมครับ?",
+        "สวสดี": "สวัสดีครับ มีอะไรให้ช่วยไหมครับ?",
+        "หวัดดี": "สวัสดีครับ มีอะไรให้ช่วยไหมครับ?",
+        "ฮาโหล": "สวัสดีครับ มีอะไรให้ช่วยไหมครับ?",
+        "hello": "Hello! How can I help you?",
+        "hi": "Hi there! มีอะไรให้ช่วยไหมครับ?",
         "ราคา": "ราคาเริ่มต้นที่ 500 บาทครับ",
-        "สั่งซื้อ": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที"
+        "กี่บาท": "ราคาเริ่มต้นที่ 500 บาทครับ",
+        "เท่าไหร่": "ราคาเริ่มต้นที่ 500 บาทครับ",
+        "สั่งซื้อ": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที",
+        "ซื้อ": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที",
+        "order": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที"
     }
 }
 
 settings = dict(DEFAULT_SETTINGS)
-# เก็บ users ที่ส่งข้อความมาแล้ว
 messaged_users = set()
 
 # ========== GitHub API ==========
@@ -91,25 +100,31 @@ def webhook():
                 sender = event['sender']['id']
                 text = event.get('message', {}).get('text', '')
 
-                # Reload settings from GitHub ทุกครั้ง
                 load_settings_from_github()
 
                 if text:
-                    # ถ้ามี keyword ตรง → ตอบตาม keyword
                     reply = get_reply(text)
                     send_message(sender, reply)
                 elif sender not in messaged_users:
-                    # ถ้าเปิดแชทครั้งแรก (ไม่มีข้อความ) → ส่ง welcome
                     send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
                     messaged_users.add(sender)
     return 'OK', 200
 
 def get_reply(text):
     text_lower = text.lower().strip()
+
+    # 1. ตรง 100%
     for keyword, answer in settings.get("keywords", {}).items():
-        if keyword in text_lower:
+        if keyword.lower() in text_lower:
             return answer
-    # ไม่มี keyword ตรง → ส่ง welcome message แทน
+
+    # 2. Fuzzy Match - จับคำผิด
+    keywords_list = list(settings.get("keywords", {}).keys())
+    close = get_close_matches(text_lower, keywords_list, n=1, cutoff=0.5)
+    if close:
+        return settings["keywords"][close[0]]
+
+    # 3. ไม่เจอ → ส่ง welcome
     return settings.get("welcome", "สวัสดีครับ!")
 
 def send_message(recipient_id, text):
