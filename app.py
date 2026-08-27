@@ -13,8 +13,7 @@ GITHUB_FILE = 'settings.json'
 GITHUB_BRANCH = 'master'
 
 DEFAULT_SETTINGS = {
-    "welcome": "สวัสดีครับ มีอะไรให้ช่วยไหมครับ?",
-    "fallback": "ขออภัยครับ ไม่เข้าใจครับ ลองใหม่อีกครั้งนะครับ",
+    "welcome": "สวัสดีครับ ยินดีต้อนรับ มีอะไรให้ช่วยไหมครับ?",
     "keywords": {
         "สวัสดี": "สวัสดีครับ มีอะไรให้ช่วยไหมครับ?",
         "ราคา": "ราคาเริ่มต้นที่ 500 บาทครับ",
@@ -23,12 +22,13 @@ DEFAULT_SETTINGS = {
 }
 
 settings = dict(DEFAULT_SETTINGS)
+# เก็บ users ที่ส่งข้อความมาแล้ว
+messaged_users = set()
 
 # ========== GitHub API ==========
 def load_settings_from_github():
     global settings
     if not GITHUB_TOKEN:
-        print("No GitHub token, using defaults")
         return
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
@@ -39,45 +39,34 @@ def load_settings_from_github():
             content = r.json().get("content", "")
             decoded = base64.b64decode(content).decode("utf-8")
             data = json.loads(decoded)
-            settings = data
-            print(f"Loaded from GitHub: {list(settings.get('keywords', {}).keys())}")
-        else:
-            print(f"GitHub load failed: {r.status_code}, using defaults")
+            if "keywords" in data:
+                settings = data
     except Exception as e:
         print(f"Error loading from GitHub: {e}")
 
 def save_settings_to_github():
     if not GITHUB_TOKEN:
-        print("No GitHub token, skipping save")
         return False
     try:
-        # Get current file SHA
         url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         r = requests.get(url, headers=headers)
         sha = r.json().get("sha", "") if r.status_code == 200 else ""
 
-        # Create/update file
         import base64
         content = json.dumps(settings, ensure_ascii=False, indent=2)
         encoded = base64.b64encode(content.encode("utf-8")).decode("utf-8")
 
-        data = {
-            "message": "Update bot settings",
-            "content": encoded,
-            "branch": GITHUB_BRANCH
-        }
+        data = {"message": "Update bot settings", "content": encoded, "branch": GITHUB_BRANCH}
         if sha:
             data["sha"] = sha
 
         r = requests.put(url, headers=headers, json=data)
-        print(f"Saved to GitHub: {r.status_code}")
         return r.status_code in [200, 201]
     except Exception as e:
         print(f"Error saving to GitHub: {e}")
         return False
 
-# Load on startup
 load_settings_from_github()
 
 @app.route('/')
@@ -101,11 +90,18 @@ def webhook():
             for event in entry.get('messaging', []):
                 sender = event['sender']['id']
                 text = event.get('message', {}).get('text', '')
+
+                # Reload settings from GitHub ทุกครั้ง
+                load_settings_from_github()
+
                 if text:
-                    # Reload settings from GitHub every time
-                    load_settings_from_github()
+                    # ถ้ามี keyword ตรง → ตอบตาม keyword
                     reply = get_reply(text)
                     send_message(sender, reply)
+                elif sender not in messaged_users:
+                    # ถ้าเปิดแชทครั้งแรก (ไม่มีข้อความ) → ส่ง welcome
+                    send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
+                    messaged_users.add(sender)
     return 'OK', 200
 
 def get_reply(text):
@@ -113,7 +109,8 @@ def get_reply(text):
     for keyword, answer in settings.get("keywords", {}).items():
         if keyword in text_lower:
             return answer
-    return settings.get("fallback", "ขออภัยครับ ไม่เข้าใจครับ")
+    # ไม่มี keyword ตรง → ส่ง welcome message แทน
+    return settings.get("welcome", "สวัสดีครับ!")
 
 def send_message(recipient_id, text):
     url = "https://graph.facebook.com/v19.0/me/messages"

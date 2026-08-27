@@ -117,7 +117,6 @@ async function loadKeywords() {
     const data = await response.json();
     
     document.getElementById('welcome-message').value = data.welcome || '';
-    document.getElementById('fallback-message').value = data.fallback || '';
     
     const keywordList = document.getElementById('keyword-list');
     keywordList.innerHTML = '';
@@ -161,7 +160,6 @@ async function saveKeywords() {
   
   const payload = {
     welcome: document.getElementById('welcome-message').value,
-    fallback: document.getElementById('fallback-message').value,
     keywords: keywords
   };
   
