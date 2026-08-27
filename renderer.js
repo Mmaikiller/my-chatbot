@@ -5,13 +5,11 @@ const RENDER_URL = 'https://my-chatbot-1-2cuw.onrender.com';
 let pages = [];
 let messageLogs = [];
 
-// ========== Navigation ==========
 function showPage(pageName) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${pageName}`).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector(`[data-page="${pageName}"]`).classList.add('active');
-  
   if (pageName === 'auto-reply') loadKeywords();
 }
 
@@ -21,7 +19,6 @@ function closeWindow() {
   if (confirm('ต้องการปิดแอปพลิเคชัน?')) window.close();
 }
 
-// ========== Toast ==========
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
@@ -30,12 +27,11 @@ function showToast(message, type = 'info') {
   setTimeout(() => toast.remove(), 3000);
 }
 
-// ========== Pages Management ==========
+// ========== Pages ==========
 async function addPage() {
   const tokenInput = document.getElementById('page-token-input');
   const token = tokenInput.value.trim();
   if (!token) { showToast('กรุณาใส่ Page Access Token', 'error'); return; }
-  showToast('กำลังดึงข้อมูลเพจ...', 'info');
   try {
     const result = await ipcRenderer.invoke('add-page', { token });
     if (result.success) {
@@ -47,7 +43,7 @@ async function addPage() {
       showToast(result.error || 'Token ไม่ถูกต้อง', 'error');
     }
   } catch (error) {
-    showToast('เกิดข้อผิดพลาด: ' + error.message, 'error');
+    showToast('เกิดข้อผิดพลาด', 'error');
   }
 }
 
@@ -62,12 +58,10 @@ async function removePage(pageId) {
 async function activatePage(pageId) {
   pages.forEach(p => p.active = (p.id === pageId));
   renderPages();
-  showToast('เปลี่ยนเพจที่ใช้งานแล้ว', 'success');
 }
 
 function pasteToken() {
-  const text = clipboard.readText();
-  document.getElementById('page-token-input').value = text;
+  document.getElementById('page-token-input').value = clipboard.readText();
   showToast('วาง Token แล้ว', 'info');
 }
 
@@ -110,7 +104,7 @@ function renderPages() {
   pagesListDashboard.innerHTML = html;
 }
 
-// ========== Auto Reply - โหลด Keyword จาก Server ==========
+// ========== Auto Reply ==========
 async function loadKeywords() {
   try {
     const response = await fetch(`${RENDER_URL}/api/settings`);
@@ -125,7 +119,7 @@ async function loadKeywords() {
       addKeywordRow(keyword, answer);
     }
   } catch (error) {
-    console.error('Error loading keywords:', error);
+    console.error('Error loading:', error);
   }
 }
 
@@ -137,7 +131,7 @@ function addKeywordRow(keyword = '', answer = '') {
     <input type="text" class="keyword-input" placeholder="คำหลัก" value="${keyword}">
     <span class="keyword-arrow">→</span>
     <input type="text" class="reply-input" placeholder="คำตอบ" value="${answer}">
-    <button class="btn btn-danger btn-sm" onclick="deleteKeyword('${keyword}', this)">🗑️</button>
+    <button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">🗑️</button>
   `;
   keywordList.appendChild(item);
 }
@@ -146,6 +140,7 @@ function addKeyword() {
   addKeywordRow();
 }
 
+// ========== บันทึกทุกอย่างลง GitHub ==========
 async function saveKeywords() {
   const keywordItems = document.querySelectorAll('.keyword-item');
   const keywords = {};
@@ -159,7 +154,7 @@ async function saveKeywords() {
   });
   
   const payload = {
-    welcome: document.getElementById('welcome-message').value,
+    welcome: document.getElementById('welcome-message').value.trim(),
     keywords: keywords
   };
   
@@ -170,8 +165,9 @@ async function saveKeywords() {
       body: JSON.stringify(payload)
     });
     
-    if (response.ok) {
-      showToast('บันทึกสำเร็จ!', 'success');
+    const result = await response.json();
+    if (result.success) {
+      showToast('บันทึกสำเร็จ! (เก็บบน GitHub แล้ว)', 'success');
     } else {
       showToast('เกิดข้อผิดพลาด', 'error');
     }
@@ -180,23 +176,6 @@ async function saveKeywords() {
   }
 }
 
-async function deleteKeyword(keyword, btn) {
-  if (confirm(`ต้องการลบ "${keyword}"?`)) {
-    try {
-      await fetch(`${RENDER_URL}/api/keywords`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword })
-      });
-      btn.parentElement.remove();
-      showToast('ลบสำเร็จ', 'success');
-    } catch (error) {
-      showToast('เกิดข้อผิดพลาด', 'error');
-    }
-  }
-}
-
-// ========== Broadcast ==========
 async function sendBroadcast() {
   const userId = document.getElementById('broadcast-user-id').value.trim();
   const message = document.getElementById('broadcast-message').value.trim();
@@ -207,52 +186,44 @@ async function sendBroadcast() {
     if (result.success !== false) {
       showToast('ส่งข้อความสำเร็จ!', 'success');
       document.getElementById('broadcast-message').value = '';
-    } else {
-      showToast(result.error || 'ส่งไม่สำเร็จ', 'error');
     }
   } catch (error) {
-    showToast('เกิดข้อผิดพลาด: ' + error.message, 'error');
+    showToast('เกิดข้อผิดพลาด', 'error');
   }
 }
 
-// ========== Copy Functions ==========
 function copyWebhook() {
   clipboard.writeText(document.getElementById('webhook-url').value);
-  showToast('คัดลอก Webhook URL แล้ว', 'success');
+  showToast('คัดลอกแล้ว', 'success');
 }
 
 function copyVerifyToken() {
   clipboard.writeText(document.getElementById('verify-token').value);
-  showToast('คัดลอก Verify Token แล้ว', 'success');
+  showToast('คัดลอกแล้ว', 'success');
 }
 
-// ========== Test Webhook ==========
 async function testWebhook() {
   const resultEl = document.getElementById('webhook-test-result');
   resultEl.textContent = ' กำลังทดสอบ...';
   try {
     const response = await fetch(`${RENDER_URL}/`);
     if (response.ok) {
-      resultEl.innerHTML = ' <span style="color: green;">✅ Webhook ทำงานปกติ!</span>';
-      showToast('Webhook ทำงานปกติ!', 'success');
+      resultEl.innerHTML = ' <span style="color: green;">✅ ทำงานปกติ!</span>';
     } else {
-      resultEl.innerHTML = ' <span style="color: red;">❌ Webhook ไม่ตอบสนอง</span>';
+      resultEl.innerHTML = ' <span style="color: red;">❌ ไม่ตอบสนอง</span>';
     }
   } catch (error) {
-    resultEl.innerHTML = ' <span style="color: red;">❌ ไม่สามารถเชื่อมต่อได้</span>';
+    resultEl.innerHTML = ' <span style="color: red;">❌ เชื่อมต่อไม่ได้</span>';
   }
 }
 
-// ========== Settings ==========
 function saveSettings() {
   showToast('บันทึกตั้งค่าสำเร็จ!', 'success');
 }
 
-// ========== Logs ==========
 function clearLogs() {
   messageLogs = [];
   renderLogs();
-  showToast('ล้างประวัติแล้ว', 'success');
 }
 
 function renderLogs() {
@@ -271,27 +242,4 @@ function renderLogs() {
       <div class="log-item">
         <div class="log-avatar">${initials}</div>
         <div class="log-content">
-          <div class="log-sender">User: ${log.sender}</div>
-          <div class="log-text">${log.text}</div>
-          <div class="log-time">${time}</div>
-        </div>
-      </div>
-    `;
-  });
-  logsEl.innerHTML = html;
-}
-
-// ========== Listen for messages ==========
-ipcRenderer.on('new-message', (event, data) => {
-  messageLogs.push(data);
-  renderLogs();
-  showToast(`ข้อความใหม่จาก ${data.sender.substring(0, 8)}...`, 'info');
-});
-
-// ========== Initialize ==========
-document.addEventListener('DOMContentLoaded', () => {
-  renderPages();
-  renderLogs();
-  document.getElementById('webhook-status').textContent = 'เชื่อมต่อแล้ว';
-  document.getElementById('bot-status').textContent = 'เปิดอยู่';
-});
+          <div class="log-sender">U
