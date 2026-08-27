@@ -368,8 +368,9 @@ function renderChatLogs() {
     else if (category === 'สั่งซื้อ') { catColor = '#27ae60'; catIcon = '🛒'; }
 
     html += '<div class="chat-log-card" style="border-left:4px solid ' + catColor + ';padding:12px;margin:8px 0;background:#f8f9fa;border-radius:8px">';
+    var displayName = (lastLog.name && lastLog.name !== sender) ? lastLog.name : sender.substring(0, 10) + '...';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-    html += '<div><strong>' + catIcon + ' ' + category + '</strong> <span style="color:#666;font-size:12px">User: ' + sender.substring(0, 10) + '...</span></div>';
+    html += '<div><strong>' + catIcon + ' ' + category + '</strong> <span style="color:#666;font-size:12px">👤 ' + displayName + '</span></div>';
     html += '<span style="color:#999;font-size:11px">' + new Date(lastLog.time).toLocaleString('th-TH') + '</span>';
     html += '</div>';
 

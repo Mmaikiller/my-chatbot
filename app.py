@@ -152,10 +152,27 @@ def webhook():
         return 'OK', 200
     return 'OK', 200
 
+def get_user_name(sender_id):
+    """ดึงชื่อผู้ใช้จาก Facebook Graph API"""
+    try:
+        url = "https://graph.facebook.com/v19.0/{}?fields=first_name,last_name&access_token={}".format(sender_id, PAGE_ACCESS_TOKEN)
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            first = data.get("first_name", "")
+            last = data.get("last_name", "")
+            name = "{} {}".format(first, last).strip()
+            return name if name else sender_id
+    except Exception as e:
+        print("Error getting user name: {}".format(e))
+    return sender_id
+
 def log_chat(sender_id, text, category):
     import datetime
+    user_name = get_user_name(sender_id)
     chat_log = {
         "sender": sender_id,
+        "name": user_name,
         "text": text,
         "category": category,
         "time": datetime.datetime.now().isoformat()
