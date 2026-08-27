@@ -17,10 +17,49 @@ GITHUB_BRANCH = 'master'
 DEFAULT_SETTINGS = {
     "welcome": "สวัสดีครับ 🙏 ยินดีต้อนรับครับ ร้านสหวัฒน์ จำหน่ายวัสดุก่อสร้างทุกชนิดครับ\n\nต้องการสินค้าอะไร หรือมีคำถามอะไร ทักมาได้เลยครับ!",
     "keywords": {},
-    "welcomed_users": []
+    "chat_logs": []
 }
 
 settings = dict(DEFAULT_SETTINGS)
+
+# ========== หมวดหมู่ ==========
+CATEGORIES = {
+    "แจ้งปัญหา": [
+        "ปัญหา", "เสีย", "พัง", "ชำรุด", "ไม่ทำงาน", "ผิดพลาด", "error",
+        " complain", "ร้องเรียน", "บ่น", "ไม่พอใจ", "ผิดหวัง", "แย่",
+        "ส่งของช้า", "ของไม่มา", "ไม่ได้ของ", "สูญหาย", "หาย", "ชำรุด",
+        "เปลี่ยน", "คืน", "refund", "return", "แจ้งปัญหา", "ช่วยแก้"
+    ],
+    "สั่งซื้อ": [
+        "สั่ง", "ซื้อ", "order", "buy", "อยากได้", "สนใจ", "จอง",
+        "เท่าไหร่", "ราคา", "กี่บาท", "กี่钱", "เงิน", "จ่าย",
+        "ส่ง", "จัดส่ง", "delivery", "ship", "รอบหน้า", "เพิ่ม",
+        "size", "ไซส์", "เบอร์", "สี", "แบบ", "รุ่น", "SKU"
+    ],
+    "สอบถาม": [
+        "สอบถาม", "ถาม", "อยากถาม", "ข้อมูล", "รายละเอียด",
+        "เวลาเปิด", "เวลาปิด", "ที่อยู่", "ติดต่อ", "เบอร์โทร",
+        "เปิดกี่โมง", "ปิดกี่โมง", "อยู่ที่ไหน", "ไปยังไง",
+        "มีไหม", "มีสินค้า", "stock", "สต็อก", "เหลือ", "หมด",
+        "how", "what", "where", "when", "who", "ทำไม", "ยังไง", "อะไร"
+    ]
+}
+
+def classify_message(text):
+    """จำแนกหมวดหมู่ข้อความ"""
+    if not text:
+        return "สอบถาม"
+    text_lower = text.lower().strip()
+    scores = {}
+    for category, keywords in CATEGORIES.items():
+        score = 0
+        for keyword in keywords:
+            if keyword.lower() in text_lower:
+                score += 1
+        scores[category] = score
+    if max(scores.values()) > 0:
+        return max(scores, key=scores.get)
+    return "สอบถาม"
 
 # ========== GitHub API ==========
 def load_settings_from_github():
@@ -37,8 +76,8 @@ def load_settings_from_github():
             data = json.loads(decoded)
             if "keywords" in data:
                 settings = data
-            if "welcomed_users" not in settings:
-                settings["welcomed_users"] = []
+            if "chat_logs" not in settings:
+                settings["chat_logs"] = []
     except Exception as e:
         print(f"Error loading from GitHub: {e}")
 
@@ -50,6 +89,9 @@ def save_settings_to_github():
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         r = requests.get(url, headers=headers, timeout=10)
         sha = r.json().get("sha", "") if r.status_code == 200 else ""
+        # เก็บแค่ 100 แชทล่าสุด (ไม่ให้ไฟล์ใหญ่เกินไป)
+        if "chat_logs" in settings and len(settings["chat_logs"]) > 100:
+            settings["chat_logs"] = settings["chat_logs"][-100:]
         content = json.dumps(settings, ensure_ascii=False, indent=2)
         encoded = base64.b64encode(content.encode("utf-8")).decode("utf-8")
         data = {"message": "Update bot settings", "content": encoded, "branch": GITHUB_BRANCH}
@@ -86,35 +128,68 @@ def webhook():
             for event in entry.get('messaging', []):
                 sender = event['sender']['id']
 
-                # โหลด settings ล่าสุด
                 load_settings_from_github()
 
-                # ตรวจสอบว่ามี postback หรือไม่ (Get Started / ปุ่มอื่นๆ)
+                # Postback (Get Started / ปุ่มอื่นๆ)
                 if 'postback' in event:
                     payload = event['postback'].get('payload', '')
                     title = event['postback'].get('title', '')
-                    print(f"Postback from {sender}: payload={payload}, title={title}")
+                    print(f"Postback from {sender}: payload={payload}")
 
-                    # ส่งข้อความต้อนรับเมื่อกด Get Started
                     if payload == 'GET_STARTED' or title == 'Get Started':
                         send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
+                        log_chat(sender, "ลูกค้ากด Get Started", "สอบถาม")
                     else:
-                        # Postback อื่นๆ → ค้นหาจาก keyword
                         reply = get_reply(payload)
                         if reply:
                             send_message(sender, reply)
+                            category = classify_message(payload)
+                            log_chat(sender, payload, category)
 
-                # ตรวจสอบข้อความ
+                # ข้อความ
                 elif 'message' in event:
                     text = event['message'].get('text', '')
                     print(f"Message from {sender}: {text}")
 
                     if text:
+                        # จำแนกหมวดหมู่
+                        category = classify_message(text)
+                        print(f"Category: {category}")
+
+                        # บันทึกแชท
+                        log_chat(sender, text, category)
+
+                        # ตอบกลับ
                         reply = get_reply(text)
                         send_message(sender, reply)
 
+                        # แจ้งเตือนถ้าเป็นปัญหา
+                        if category == "แจ้งปัญหา":
+                            notify_owner(sender, text)
+
         return 'OK', 200
     return 'OK', 200
+
+def log_chat(sender_id, text, category):
+    """บันทึกแชทพร้อมหมวดหมู่"""
+    chat_log = {
+        "sender": sender_id,
+        "text": text,
+        "category": category,
+        "time": __import__('datetime').datetime.now().isoformat()
+    }
+    settings.setdefault("chat_logs", []).append(chat_log)
+    save_settings_to_github()
+
+def notify_owner(sender_id, text):
+    """แจ้งเตือนเจ้าของเพจเมื่อมีปัญหา"""
+    notify_msg = f"⚠️ แจ้งปัญหาจากลูกค้า!\n\nลูกค้า: {sender_id}\nข้อความ: {text}\n\nหมวดหมู่: แจ้งปัญหา"
+    # ส่งถึงผู้ดูแล (ใช้ Page Access Token)
+    url = "https://graph.facebook.com/v19.0/me/messages"
+    # ถ้าต้องการส่งถึง admin ให้ใส่ admin PSID
+    # payload = {"recipient": {"id": "ADMIN_PSID"}, "message": {"text": notify_msg}, "access_token": PAGE_ACCESS_TOKEN}
+    # requests.post(url, json=payload, timeout=10)
+    print(f"ALERT: {notify_msg}")
 
 def get_reply(text):
     if not text:
@@ -133,7 +208,6 @@ def get_reply(text):
         if close:
             return settings["keywords"][close[0]]
 
-    # ไม่เจอ → ตอบ welcome
     return settings.get("welcome", "สวัสดีครับ!")
 
 def send_message(recipient_id, text):
@@ -158,11 +232,21 @@ def get_settings():
 def update_settings():
     global settings
     new_settings = request.get_json()
-    if "welcomed_users" not in new_settings:
-        new_settings["welcomed_users"] = settings.get("welcomed_users", [])
     settings.update(new_settings)
     save_settings_to_github()
     return jsonify({"success": True, "settings": settings})
+
+@app.route('/api/chat-logs', methods=['GET'])
+def get_chat_logs():
+    load_settings_from_github()
+    return jsonify(settings.get("chat_logs", []))
+
+@app.route('/api/chat-logs', methods=['DELETE'])
+def clear_chat_logs():
+    global settings
+    settings["chat_logs"] = []
+    save_settings_to_github()
+    return jsonify({"success": True})
 
 @app.route('/api/keywords', methods=['POST'])
 def add_keyword():

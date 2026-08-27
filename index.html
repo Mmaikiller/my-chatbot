@@ -234,17 +234,60 @@
       <!-- Logs Page -->
       <div id="page-logs" class="page">
         <div class="page-header">
-          <h1>📋 ประวัติข้อความ</h1>
+          <h1>📋 ประวัติแชทลูกค้า</h1>
+        </div>
+
+        <!-- สถิติหมวดหมู่ -->
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card" style="border-left:4px solid #e74c3c">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-info">
+              <h3 id="count-problems">0</h3>
+              <p>แจ้งปัญหา</p>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid #27ae60">
+            <div class="stat-icon">🛒</div>
+            <div class="stat-info">
+              <h3 id="count-orders">0</h3>
+              <p>สั่งซื้อ</p>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid #3498db">
+            <div class="stat-icon">❓</div>
+            <div class="stat-info">
+              <h3 id="count-questions">0</h3>
+              <p>สอบถาม</p>
+            </div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid #9b59b6">
+            <div class="stat-icon">💬</div>
+            <div class="stat-info">
+              <h3 id="count-total-chats">0</h3>
+              <p>แชททั้งหมด</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ตัวกรอง -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-body" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <label>ตัวกรอง:</label>
+            <button class="btn btn-sm btn-primary filter-btn" onclick="filterLogs('all')">ทั้งหมด</button>
+            <button class="btn btn-sm filter-btn" style="background:#e74c3c;color:white" onclick="filterLogs('แจ้งปัญหา')">⚠️ แจ้งปัญหา</button>
+            <button class="btn btn-sm filter-btn" style="background:#27ae60;color:white" onclick="filterLogs('สั่งซื้อ')">🛒 สั่งซื้อ</button>
+            <button class="btn btn-sm filter-btn" style="background:#3498db;color:white" onclick="filterLogs('สอบถาม')">❓ สอบถาม</button>
+            <button class="btn btn-sm btn-secondary" style="margin-left:auto" onclick="clearChatLogs()">🗑️ ล้างทั้งหมด</button>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <h2>ข้อความล่าสุด</h2>
-            <button class="btn btn-secondary btn-sm" onclick="clearLogs()">🗑️ ล้าง</button>
+            <h2>💬 รายการแชทลูกค้า</h2>
           </div>
-          <div class="card-body" id="message-logs">
+          <div class="card-body" id="chat-logs-list">
             <div class="empty-state">
-              <p>ยังไม่มีประวัติข้อความ</p>
+              <p>ยังไม่มีประวัติแชท</p>
             </div>
           </div>
         </div>

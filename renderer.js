@@ -284,35 +284,154 @@ function loadGithubToken() {
   return token;
 }
 
-function clearLogs() {
-  messageLogs = [];
-  renderLogs();
+// ========== Chat Logs ==========
+var allChatLogs = [];
+var currentFilter = 'all';
+
+async function loadChatLogs() {
+  try {
+    var response = await fetch(RENDER_URL + '/api/chat-logs');
+    allChatLogs = await response.json();
+    updateLogStats();
+    renderChatLogs();
+  } catch (error) {
+    console.error('Error loading chat logs:', error);
+  }
 }
 
-function renderLogs() {
-  var logsEl = document.getElementById('message-logs');
-  var totalMessages = document.getElementById('total-messages');
-  totalMessages.textContent = messageLogs.length;
-  if (messageLogs.length === 0) {
-    logsEl.innerHTML = '<div class="empty-state"><p>ยังไม่มีประวัติข้อความ</p></div>';
+function updateLogStats() {
+  var problems = 0, orders = 0, questions = 0;
+  allChatLogs.forEach(function(log) {
+    if (log.category === 'แจ้งปัญหา') problems++;
+    else if (log.category === 'สั่งซื้อ') orders++;
+    else questions++;
+  });
+  var el1 = document.getElementById('count-problems');
+  var el2 = document.getElementById('count-orders');
+  var el3 = document.getElementById('count-questions');
+  var el4 = document.getElementById('count-total-chats');
+  if (el1) el1.textContent = problems;
+  if (el2) el2.textContent = orders;
+  if (el3) el3.textContent = questions;
+  if (el4) el4.textContent = allChatLogs.length;
+  // Dashboard
+  var totalEl = document.getElementById('total-messages');
+  if (totalEl) totalEl.textContent = allChatLogs.length;
+}
+
+function filterLogs(category) {
+  currentFilter = category;
+  renderChatLogs();
+  // ไฮไลท์ปุ่มที่กด
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.style.opacity = '0.5';
+  });
+  event.target.style.opacity = '1';
+}
+
+function renderChatLogs() {
+  var logsEl = document.getElementById('chat-logs-list');
+  var recentEl = document.getElementById('recent-messages');
+  if (!logsEl) return;
+
+  var filtered = allChatLogs;
+  if (currentFilter !== 'all') {
+    filtered = allChatLogs.filter(function(log) {
+      return log.category === currentFilter;
+    });
+  }
+
+  if (filtered.length === 0) {
+    logsEl.innerHTML = '<div class="empty-state"><p>ยังไม่มีประวัติแชท</p></div>';
+    if (recentEl) recentEl.innerHTML = '<div class="empty-state"><p>ยังไม่มีข้อความ</p></div>';
     return;
   }
-  var html = '';
-  messageLogs.slice().reverse().forEach(function(log) {
-    var initials = log.sender.substring(0, 2);
-    var time = new Date(log.time).toLocaleString('th-TH');
-    html += '<div class="log-item"><div class="log-avatar">' + initials + '</div>';
-    html += '<div class="log-content"><div class="log-sender">User: ' + log.sender + '</div>';
-    html += '<div class="log-text">' + log.text + '</div>';
-    html += '<div class="log-time">' + time + '</div></div></div>';
+
+  // จัดกลุ่มตาม sender
+  var grouped = {};
+  filtered.forEach(function(log) {
+    if (!grouped[log.sender]) {
+      grouped[log.sender] = [];
+    }
+    grouped[log.sender].push(log);
   });
+
+  var html = '';
+  var senders = Object.keys(grouped).reverse();
+  senders.forEach(function(sender) {
+    var logs = grouped[sender];
+    var lastLog = logs[logs.length - 1];
+    var category = lastLog.category;
+    var catColor = '#3498db';
+    var catIcon = '❓';
+    if (category === 'แจ้งปัญหา') { catColor = '#e74c3c'; catIcon = '⚠️'; }
+    else if (category === 'สั่งซื้อ') { catColor = '#27ae60'; catIcon = '🛒'; }
+
+    html += '<div class="chat-log-card" style="border-left:4px solid ' + catColor + ';padding:12px;margin:8px 0;background:#f8f9fa;border-radius:8px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    html += '<div><strong>' + catIcon + ' ' + category + '</strong> <span style="color:#666;font-size:12px">User: ' + sender.substring(0, 10) + '...</span></div>';
+    html += '<span style="color:#999;font-size:11px">' + new Date(lastLog.time).toLocaleString('th-TH') + '</span>';
+    html += '</div>';
+
+    // แสดงข้อความ 3 ข้อความล่าสุด
+    var showLogs = logs.slice(-3);
+    showLogs.forEach(function(log) {
+      var isUser = log.text.startsWith('ลูกค้า');
+      var bgColor = isUser ? '#e3f2fd' : '#f1f8e9';
+      html += '<div style="background:' + bgColor + ';padding:6px 10px;margin:4px 0;border-radius:6px;font-size:13px">';
+      html += (isUser ? '👤 ' : '🤖 ') + log.text;
+      html += '</div>';
+    });
+
+    if (logs.length > 3) {
+      html += '<div style="text-align:center;color:#999;font-size:11px;margin-top:4px">และอีก ' + (logs.length - 3) + ' ข้อความ...</div>';
+    }
+    html += '</div>';
+  });
+
   logsEl.innerHTML = html;
+
+  // Dashboard - แสดง 5 ข้อความล่าสุด
+  if (recentEl) {
+    var recent = allChatLogs.slice(-5).reverse();
+    if (recent.length === 0) {
+      recentEl.innerHTML = '<div class="empty-state"><p>ยังไม่มีข้อความ</p></div>';
+    } else {
+      var rhtml = '';
+      recent.forEach(function(log) {
+        var catIcon = '❓';
+        if (log.category === 'แจ้งปัญหา') catIcon = '⚠️';
+        else if (log.category === 'สั่งซื้อ') catIcon = '🛒';
+        rhtml += '<div style="padding:8px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center">';
+        rhtml += '<span>' + catIcon + '</span>';
+        rhtml += '<div style="flex:1"><strong>' + log.category + '</strong><br><small style="color:#666">' + log.text.substring(0, 50) + '</small></div>';
+        rhtml += '<small style="color:#999">' + new Date(log.time).toLocaleString('th-TH') + '</small>';
+        rhtml += '</div>';
+      });
+      recentEl.innerHTML = rhtml;
+    }
+  }
+}
+
+async function clearChatLogs() {
+  if (!confirm('ต้องการล้างประวัติแชททั้งหมด?')) return;
+  try {
+    await fetch(RENDER_URL + '/api/chat-logs', { method: 'DELETE' });
+    allChatLogs = [];
+    updateLogStats();
+    renderChatLogs();
+    showToast('ล้างประวัติแล้ว!', 'success');
+  } catch (error) {
+    showToast('เกิดข้อผิดพลาด', 'error');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
   renderPages();
-  renderLogs();
+  loadChatLogs();
   loadGithubToken();
   document.getElementById('webhook-status').textContent = 'เชื่อมต่อแล้ว';
   document.getElementById('bot-status').textContent = 'เปิดอยู่';
+  // โหลด chat logs ทุก 10 วินาที
+  setInterval(loadChatLogs, 10000);
 });
