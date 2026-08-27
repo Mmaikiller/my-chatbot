@@ -8,16 +8,28 @@ app = Flask(__name__)
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'my_verify_token')
 
-# ========== Settings (เก็บในหน่วยความจำ) ==========
-settings = {
-    "welcome": "สวัสดีค่ะ ยินดีต้อนรับ มีอะไรให้ช่วยไหมคะ?",
-    "fallback": "ขออภัยค่ะ ไม่เข้าใจที่พิมพ์มา ลองใหม่อีกครั้งนะคะ",
-    "keywords": {
-        "สวัสดี": "สวัสดีค่ะ ยินดีต้อนรับ มีอะไรให้ช่วยไหมคะ?",
-        "ราคา": "ราคาเริ่มต้นที่ 500 บาทค่ะ",
-        "สั่งซื้อ": "สนใจสั่งซื้อ DM มาได้เลยค่ะ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที",
+# ========== Settings (เก็บในไฟล์) ==========
+SETTINGS_FILE = 'settings.json'
+
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        "welcome": "สวัสดีค่ะ ยินดีต้อนรับ มีอะไรให้ช่วยไหมคะ?",
+        "fallback": "ขออภัยค่ะ ไม่เข้าใจที่พิมพ์มา ลองใหม่อีกครั้งนะคะ",
+        "keywords": {
+            "สวัสดี": "สวัสดีค่ะ ยินดีต้อนรับ มีอะไรให้ช่วยไหมคะ?",
+            "ราคา": "ราคาเริ่มต้นที่ 500 บาทค่ะ",
+            "สั่งซื้อ": "สนใจสั่งซื้อ DM มาได้เลยค่ะ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที",
+        }
     }
-}
+
+def save_settings(settings):
+    with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+
+settings = load_settings()
 
 @app.route('/')
 def home():
@@ -65,20 +77,18 @@ def send_message(recipient_id, text):
 
 # ========== API สำหรับ Desktop App ==========
 
-# ดึงตั้งค่าทั้งหมด
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     return jsonify(settings)
 
-# อัพเดทตั้งค่า
 @app.route('/api/settings', methods=['POST'])
 def update_settings():
     global settings
     new_settings = request.get_json()
     settings.update(new_settings)
+    save_settings(settings)
     return jsonify({"success": True, "settings": settings})
 
-# เพิ่ม Keyword
 @app.route('/api/keywords', methods=['POST'])
 def add_keyword():
     data = request.get_json()
@@ -86,20 +96,20 @@ def add_keyword():
     answer = data.get('answer')
     if keyword and answer:
         settings["keywords"][keyword] = answer
+        save_settings(settings)
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "Missing keyword or answer"}), 400
 
-# ลบ Keyword
 @app.route('/api/keywords', methods=['DELETE'])
 def delete_keyword():
     data = request.get_json()
     keyword = data.get('keyword')
     if keyword and keyword in settings["keywords"]:
         del settings["keywords"][keyword]
+        save_settings(settings)
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "Keyword not found"}), 404
 
-# ดึง Keywords ทั้งหมด
 @app.route('/api/keywords', methods=['GET'])
 def get_keywords():
     return jsonify(settings["keywords"])
