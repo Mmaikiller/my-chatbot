@@ -116,8 +116,8 @@ function renderPages() {
 }
 
 // ========== Auto Reply ==========
-async function loadKeywords() {
-  // โหลดจาก localStorage ก่อน (ทันที)
+function loadKeywords() {
+  // โหลดจาก localStorage เท่านั้น (ไม่โหลดจาก server)
   var localSettings = JSON.parse(localStorage.getItem('chatbot_settings') || 'null');
   if (localSettings) {
     document.getElementById('welcome-message').value = localSettings.welcome || '';
@@ -127,24 +127,10 @@ async function loadKeywords() {
     for (var i = 0; i < keys.length; i++) {
       addKeywordRow(keys[i], localSettings.keywords[keys[i]]);
     }
-  }
-
-  // แล้วโหลดจาก Server มา sync
-  try {
-    var response = await fetch(RENDER_URL + '/api/settings');
-    var data = await response.json();
-    document.getElementById('welcome-message').value = data.welcome || '';
-    var keywordList = document.getElementById('keyword-list');
-    keywordList.innerHTML = '';
-    var keys = Object.keys(data.keywords || {});
-    for (var i = 0; i < keys.length; i++) {
-      addKeywordRow(keys[i], data.keywords[keys[i]]);
-    }
-    // บันทึกลง localStorage ด้วย
-    localStorage.setItem('chatbot_settings', JSON.stringify(data));
-  } catch (error) {
-    console.error('Error loading from server:', error);
-    // ใช้ localStorage เป็น fallback
+  } else {
+    // ถ้ายังไม่มี localStorage → ใช้ค่าเริ่มต้น
+    document.getElementById('welcome-message').value = 'สวัสดีครับ ยินดีต้อนรับ มีอะไรให้ช่วยไหมครับ?';
+    document.getElementById('keyword-list').innerHTML = '';
   }
 }
 
