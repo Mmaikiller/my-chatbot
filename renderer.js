@@ -1,4 +1,10 @@
-const { ipcRenderer, clipboard } = require('electron');
+let ipcRenderer, clipboard;
+try {
+  ({ ipcRenderer, clipboard } = require('electron'));
+} catch(e) {
+  clipboard = { readText: () => '', writeText: () => {} };
+  ipcRenderer = { invoke: async () => ({success:false}), on: () => {} };
+}
 
 const RENDER_URL = 'https://my-chatbot-1-2cuw.onrender.com';
 

@@ -28,11 +28,11 @@ DEFAULT_SETTINGS = {
         "สั่งซื้อ": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที",
         "ซื้อ": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที",
         "order": "สนใจสั่งซื้อ DM มาได้เลยครับ จะมีเจ้าหน้าที่ตอบภายใน 5 นาที"
-    }
+    },
+    "welcomed_users": []
 }
 
 settings = dict(DEFAULT_SETTINGS)
-messaged_users = set()
 
 # ========== GitHub API ==========
 def load_settings_from_github():
@@ -50,6 +50,8 @@ def load_settings_from_github():
             data = json.loads(decoded)
             if "keywords" in data:
                 settings = data
+                if "welcomed_users" not in settings:
+                    settings["welcomed_users"] = []
     except Exception as e:
         print(f"Error loading from GitHub: {e}")
 
@@ -105,26 +107,25 @@ def webhook():
                 if text:
                     reply = get_reply(text)
                     send_message(sender, reply)
-                elif sender not in messaged_users:
-                    send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
-                    messaged_users.add(sender)
+                else:
+                    # ส่ง welcome เฉพาะครั้งแรกเท่านั้น
+                    welcomed = settings.get("welcomed_users", [])
+                    if sender not in welcomed:
+                        send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
+                        welcomed.append(sender)
+                        settings["welcomed_users"] = welcomed
+                        save_settings_to_github()
     return 'OK', 200
 
 def get_reply(text):
     text_lower = text.lower().strip()
-
-    # 1. ตรง 100%
     for keyword, answer in settings.get("keywords", {}).items():
-        if keyword.lower() in text_lower:
+        if keyword in text_lower:
             return answer
-
-    # 2. Fuzzy Match - จับคำผิด
     keywords_list = list(settings.get("keywords", {}).keys())
     close = get_close_matches(text_lower, keywords_list, n=1, cutoff=0.5)
     if close:
         return settings["keywords"][close[0]]
-
-    # 3. ไม่เจอ → ส่ง welcome
     return settings.get("welcome", "สวัสดีครับ!")
 
 def send_message(recipient_id, text):
@@ -145,6 +146,9 @@ def get_settings():
 def update_settings():
     global settings
     new_settings = request.get_json()
+    # ไม่ให้ Desktop App ลบ welcomed_users
+    if "welcomed_users" not in new_settings:
+        new_settings["welcomed_users"] = settings.get("welcomed_users", [])
     settings.update(new_settings)
     save_settings_to_github()
     return jsonify({"success": True, "settings": settings})
