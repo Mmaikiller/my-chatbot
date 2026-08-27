@@ -137,8 +137,6 @@ def webhook():
                         reply = get_reply(payload)
                         if reply:
                             send_message(sender, reply)
-                        else:
-                            send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
                         log_chat(sender, payload, classify_message(payload))
 
                 elif 'message' in event:
@@ -150,8 +148,6 @@ def webhook():
                         reply = get_reply(text)
                         if reply:
                             send_message(sender, reply)
-                        else:
-                            send_message(sender, settings.get("welcome", "สวัสดีครับ!"))
 
                         if category == "แจ้งปัญหา":
                             print("ALERT: แจ้งปัญหาจาก {} {}".format(sender, text))
