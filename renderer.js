@@ -164,26 +164,69 @@ async function saveKeywords() {
     keywords: keywords
   };
 
-  // บันทึกลง localStorage ทันที (ไม่ต้องรอ server)
+  // 1. บันทึกลง localStorage ทันที
   localStorage.setItem('chatbot_settings', JSON.stringify(payload));
   showToast('บันทึกลงเครื่องแล้ว!', 'success');
 
-  // ส่งไปที่ Render Server (บันทึกลง GitHub)
+  // 2. บันทึกลง GitHub โดยตรง
+  var githubToken = loadGithubToken();
+  if (githubToken) {
+    try {
+      await saveToGitHub(payload, githubToken);
+      showToast('บันทึกลง GitHub แล้ว!', 'success');
+    } catch (e) {
+      showToast('GitHub บันทึกไม่ได้: ' + e.message, 'error');
+    }
+  }
+
+  // 3. POST ให้ Render Server อัพเดท memory
   try {
-    var response = await fetch(RENDER_URL + '/api/settings', {
+    await fetch(RENDER_URL + '/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    var result = await response.json();
-    if (result.success) {
-      showToast('บันทึกขึ้น Server แล้ว!', 'success');
-    } else {
-      showToast('บันทึกลงเครื่องแล้ว (Server ยังไม่ได้)', 'info');
-    }
-  } catch (error) {
-    showToast('บันทึกลงเครื่องแล้ว (Server ยังไม่ได้)', 'info');
+  } catch (e) {}
+}
+
+async function saveToGitHub(payload, token) {
+  var repo = 'Mmaikiller/my-chatbot';
+  var file = 'settings.json';
+  var branch = 'master';
+  var url = 'https://api.github.com/repos/' + repo + '/contents/' + file;
+  var headers = {
+    'Authorization': 'token ' + token,
+    'Accept': 'application/vnd.github.v3+json'
+  };
+
+  // ดึง SHA ของไฟล์เดิม
+  var getResp = await fetch(url + '?ref=' + branch, { headers: headers });
+  var sha = '';
+  if (getResp.ok) {
+    var fileData = await getResp.json();
+    sha = fileData.sha || '';
   }
+
+  // เขียนไฟล์ใหม่
+  var content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+  var body = {
+    message: 'Update bot settings from Desktop App',
+    content: content,
+    branch: branch
+  };
+  if (sha) body.sha = sha;
+
+  var putResp = await fetch(url, {
+    method: 'PUT',
+    headers: headers,
+    body: JSON.stringify(body)
+  });
+
+  if (!putResp.ok) {
+    var err = await putResp.json();
+    throw new Error(err.message || 'GitHub API error');
+  }
+  return true;
 }
 
 async function sendBroadcast() {
@@ -226,7 +269,19 @@ async function testWebhook() {
 }
 
 function saveSettings() {
+  var githubToken = document.getElementById('github-token').value.trim();
+  if (githubToken) {
+    localStorage.setItem('chatbot_github_token', githubToken);
+  }
   showToast('บันทึกตั้งค่าสำเร็จ!', 'success');
+}
+
+// โหลด GitHub Token จาก localStorage
+function loadGithubToken() {
+  var token = localStorage.getItem('chatbot_github_token') || '';
+  var input = document.getElementById('github-token');
+  if (input) input.value = token;
+  return token;
 }
 
 function clearLogs() {
@@ -257,6 +312,7 @@ function renderLogs() {
 document.addEventListener('DOMContentLoaded', function() {
   renderPages();
   renderLogs();
+  loadGithubToken();
   document.getElementById('webhook-status').textContent = 'เชื่อมต่อแล้ว';
   document.getElementById('bot-status').textContent = 'เปิดอยู่';
 });
