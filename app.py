@@ -62,17 +62,18 @@ def load_settings_from_github():
     if not GITHUB_TOKEN:
         return
     try:
-        url = "https://api.github.com/repos/{}/contents/{}".format(GITHUB_REPO, GITHUB_FILE)
+        url = "https://api.github.com/repos/{}/contents/{}?ref={}".format(GITHUB_REPO, GITHUB_FILE, GITHUB_BRANCH)
         headers = {"Authorization": "token {}".format(GITHUB_TOKEN), "Accept": "application/vnd.github.v3+json"}
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             content = r.json().get("content", "")
             decoded = base64.b64decode(content).decode("utf-8")
             data = json.loads(decoded)
-            if "keywords" in data:
-                settings = data
+            settings = data
             if "chat_logs" not in settings:
                 settings["chat_logs"] = []
+        else:
+            print("GitHub load failed: {} {}".format(r.status_code, r.text[:100]))
     except Exception as e:
         print("Error loading from GitHub: {}".format(e))
 
@@ -80,7 +81,7 @@ def save_settings_to_github():
     if not GITHUB_TOKEN:
         return False
     try:
-        url = "https://api.github.com/repos/{}/contents/{}".format(GITHUB_REPO, GITHUB_FILE)
+        url = "https://api.github.com/repos/{}/contents/{}?ref={}".format(GITHUB_REPO, GITHUB_FILE, GITHUB_BRANCH)
         headers = {"Authorization": "token {}".format(GITHUB_TOKEN), "Accept": "application/vnd.github.v3+json"}
         r = requests.get(url, headers=headers, timeout=10)
         sha = r.json().get("sha", "") if r.status_code == 200 else ""

@@ -193,7 +193,7 @@ async function saveToGitHub(payload, token) {
   var repo = 'Mmaikiller/my-chatbot';
   var file = 'settings.json';
   var branch = 'master';
-  var url = 'https://api.github.com/repos/' + repo + '/contents/' + file;
+  var url = 'https://api.github.com/repos/' + repo + '/contents/' + file + '?ref=master';
   var headers = {
     'Authorization': 'token ' + token,
     'Accept': 'application/vnd.github.v3+json'
