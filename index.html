@@ -376,6 +376,21 @@
 
         <div class="card">
           <div class="card-header">
+            <h2>📋 Debug Log (ดูสถานะ)</h2>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm btn-secondary" onclick="copyDebugLog()">📋 คัดลอก Log</button>
+              <button class="btn btn-sm btn-danger" onclick="clearDebugLog()">🗑️ ล้าง</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="debug-log" class="debug-log-container">
+              <div class="debug-log-empty">ยังไม่มี Log — ลองกดบันทึกคีย์เวิร์ดแล้วดูที่นี่</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
             <h2>เกี่ยวกับ</h2>
           </div>
           <div class="card-body">

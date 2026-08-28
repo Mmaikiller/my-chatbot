@@ -8,6 +8,53 @@ try {
 
 const RENDER_URL = 'https://my-chatbot-1-2cuw.onrender.com';
 
+// ========== Debug Log ==========
+var debugEntries = [];
+
+function debugLog(type, message) {
+  var time = new Date().toLocaleTimeString('th-TH');
+  var entry = { time: time, type: type, message: message };
+  debugEntries.push(entry);
+
+  var container = document.getElementById('debug-log');
+  if (!container) return;
+
+  // ลบ empty state
+  var empty = container.querySelector('.debug-log-empty');
+  if (empty) empty.remove();
+
+  var div = document.createElement('div');
+  div.className = 'debug-log-entry';
+
+  var icon = '';
+  if (type === 'ok') icon = '✅';
+  else if (type === 'error') icon = '❌';
+  else if (type === 'warn') icon = '⚠️';
+  else if (type === 'info') icon = 'ℹ️';
+  else if (type === 'step') icon = '▶️';
+
+  div.innerHTML = '<span class="debug-log-time">' + time + '</span> <span class="debug-log-icon">' + icon + '</span> <span class="debug-log-msg">' + message + '</span>';
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearDebugLog() {
+  debugEntries = [];
+  var container = document.getElementById('debug-log');
+  if (container) {
+    container.innerHTML = '<div class="debug-log-empty">ล้างแล้ว — กดบันทึกคีย์เวิร์ดเพื่อดู Log ใหม่</div>';
+  }
+}
+
+function copyDebugLog() {
+  var text = debugEntries.map(function(e) {
+    return '[' + e.time + '] ' + e.type.toUpperCase() + ': ' + e.message;
+  }).join('\n');
+  if (!text) { showToast('ยังไม่มี Log', 'info'); return; }
+  clipboard.writeText(text);
+  showToast('คัดลอก Log แล้ว (' + debugEntries.length + ' รายการ)', 'success');
+}
+
 let pages = JSON.parse(localStorage.getItem('chatbot_pages') || '[]');
 let messageLogs = [];
 
@@ -117,20 +164,21 @@ function renderPages() {
 
 // ========== Auto Reply ==========
 function loadKeywords() {
-  // โหลดจาก localStorage เท่านั้น (ไม่โหลดจาก server)
+  debugLog('step', 'กำลังโหลดคีย์เวิร์ดจาก localStorage...');
   var localSettings = JSON.parse(localStorage.getItem('chatbot_settings') || 'null');
   if (localSettings) {
+    var keys = Object.keys(localSettings.keywords || {});
     document.getElementById('welcome-message').value = localSettings.welcome || '';
     var keywordList = document.getElementById('keyword-list');
     keywordList.innerHTML = '';
-    var keys = Object.keys(localSettings.keywords || {});
     for (var i = 0; i < keys.length; i++) {
       addKeywordRow(keys[i], localSettings.keywords[keys[i]]);
     }
+    debugLog('ok', 'โหลดคีย์เวิร์ดสำเร็จ: ' + keys.length + ' ตัว' + (keys.length > 0 ? ' (' + keys.join(', ') + ')' : ''));
   } else {
-    // ถ้ายังไม่มี localStorage → ใช้ค่าเริ่มต้น
     document.getElementById('welcome-message').value = 'สวัสดีครับ ยินดีต้อนรับ มีอะไรให้ช่วยไหมครับ?';
     document.getElementById('keyword-list').innerHTML = '';
+    debugLog('warn', 'ไม่มีข้อมูลใน localStorage — ยังไม่เคยบันทึกคีย์เวิร์ด');
   }
 }
 
@@ -152,41 +200,83 @@ function addKeyword() {
 }
 
 async function saveKeywords() {
+  debugLog('step', '=== เริ่มบันทึกคีย์เวิร์ด ===');
+
+  // --- เก็บ keywords จาก UI ---
   var keywordItems = document.querySelectorAll('.keyword-item');
   var keywords = {};
+  var skippedCount = 0;
   keywordItems.forEach(function(item) {
     var kw = item.querySelector('.keyword-input').value.trim();
     var ans = item.querySelector('.reply-input').value.trim();
     if (kw && ans) { keywords[kw] = ans; }
+    else { skippedCount++; }
   });
+  var totalKw = Object.keys(keywords).length;
+  debugLog('info', 'พบคีย์เวิร์ด ' + totalKw + ' ตัว' + (skippedCount > 0 ? ' (ข้าม ' + skippedCount + ' ตัวที่ไม่ครบ)' : ''));
+  if (totalKw > 0) {
+    debugLog('info', 'คีย์เวิร์ด: ' + Object.keys(keywords).join(', '));
+  }
+
   var payload = {
     welcome: document.getElementById('welcome-message').value.trim(),
     keywords: keywords
   };
 
-  // 1. บันทึกลง localStorage ทันที
-  localStorage.setItem('chatbot_settings', JSON.stringify(payload));
+  // --- Step 1: บันทึกลง localStorage ---
+  try {
+    localStorage.setItem('chatbot_settings', JSON.stringify(payload));
+    var saved = JSON.parse(localStorage.getItem('chatbot_settings'));
+    if (JSON.stringify(saved) === JSON.stringify(payload)) {
+      debugLog('ok', 'Step 1/3 บันทึกลง localStorage สำเร็จ (' + JSON.stringify(payload).length + ' bytes)');
+    } else {
+      debugLog('error', 'Step 1/3 localStorage บันทึกแล้วแต่ข้อมูลไม่ตรง!');
+    }
+  } catch (e) {
+    debugLog('error', 'Step 1/3 localStorage ล้มเหลว: ' + e.message);
+  }
   showToast('บันทึกลงเครื่องแล้ว!', 'success');
 
-  // 2. บันทึกลง GitHub โดยตรง
+  // --- Step 2: บันทึกลง GitHub ---
   var githubToken = loadGithubToken();
   if (githubToken) {
+    debugLog('step', 'Step 2/3 กำลังบันทึกลง GitHub...');
     try {
       await saveToGitHub(payload, githubToken);
+      debugLog('ok', 'Step 2/3 บันทึกลง GitHub สำเร็จ (repo: Mmaikiller/my-chatbot)');
       showToast('บันทึกลง GitHub แล้ว!', 'success');
     } catch (e) {
+      debugLog('error', 'Step 2/3 GitHub บันทึกไม่ได้: ' + e.message);
       showToast('GitHub บันทึกไม่ได้: ' + e.message, 'error');
     }
+  } else {
+    debugLog('warn', 'Step 2/3 ข้าม GitHub — ไม่มี GitHub Token (ไปตั้งที่หน้า ตั้งค่า)');
   }
 
-  // 3. POST ให้ Render Server อัพเดท memory
+  // --- Step 3: POST ให้ Render Server ---
+  debugLog('step', 'Step 3/3 กำลังส่งไปที่ Render Server: ' + RENDER_URL);
   try {
-    await fetch(RENDER_URL + '/api/settings', {
+    var renderResp = await fetch(RENDER_URL + '/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-  } catch (e) {}
+    var respText = '';
+    try { respText = await renderResp.text(); } catch(e) {}
+    if (renderResp.ok) {
+      debugLog('ok', 'Step 3/3 Render Server ตอบ OK (สถานะ ' + renderResp.status + ')');
+      showToast('sync กับ Server สำเร็จ!', 'success');
+    } else {
+      debugLog('error', 'Step 3/3 Render Server ตอบผิดปกติ (สถานะ ' + renderResp.status + '): ' + respText.substring(0, 200));
+      showToast('Server ตอบกลับผิดปกติ (สถานะ ' + renderResp.status + ')', 'error');
+    }
+  } catch (e) {
+    debugLog('error', 'Step 3/3 เชื่อมต่อ Render ไม่ได้: ' + e.message + ' — อาจเป็น CORS หรือ Server ปิดอยู่');
+    console.error('Render POST error:', e.message);
+    showToast('เชื่อมต่อ Server ไม่ได้: ' + e.message, 'error');
+  }
+
+  debugLog('step', '=== จบการบันทึก ===');
 }
 
 async function saveToGitHub(payload, token) {
@@ -199,12 +289,15 @@ async function saveToGitHub(payload, token) {
     'Accept': 'application/vnd.github.v3+json'
   };
 
-  // ดึง SHA ของไฟล์เดิม
+  debugLog('info', 'GitHub: กำลังดึง SHA ไฟล์เดิมจาก ' + repo + '...');
   var getResp = await fetch(url + '?ref=' + branch, { headers: headers });
   var sha = '';
   if (getResp.ok) {
     var fileData = await getResp.json();
     sha = fileData.sha || '';
+    debugLog('info', 'GitHub: ได้ SHA แล้ว = ' + sha.substring(0, 12) + '...');
+  } else {
+    debugLog('warn', 'GitHub: ดึง SHA ไม่ได้ (สถานะ ' + getResp.status + ') — ไฟล์อาจยังไม่มี หรือ Token ผิด');
   }
 
   // เขียนไฟล์ใหม่
@@ -216,6 +309,7 @@ async function saveToGitHub(payload, token) {
   };
   if (sha) body.sha = sha;
 
+  debugLog('info', 'GitHub: กำลังเขียนไฟล์...');
   var putResp = await fetch(url, {
     method: 'PUT',
     headers: headers,
@@ -223,9 +317,12 @@ async function saveToGitHub(payload, token) {
   });
 
   if (!putResp.ok) {
-    var err = await putResp.json();
-    throw new Error(err.message || 'GitHub API error');
+    var errData = await putResp.json().catch(function() { return {}; });
+    var errMsg = errData.message || ('HTTP ' + putResp.status);
+    debugLog('error', 'GitHub: เขียนไฟล์ไม่สำเร็จ — ' + errMsg);
+    throw new Error(errMsg);
   }
+  debugLog('ok', 'GitHub: เขียนไฟล์สำเร็จ!');
   return true;
 }
 

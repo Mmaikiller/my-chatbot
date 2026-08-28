@@ -2,15 +2,20 @@ import os
 import json
 import base64
 import datetime
+import time
+import re
 import requests
 from difflib import get_close_matches
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 PAGE_ACCESS_TOKEN = os.environ.get('PAGE_ACCESS_TOKEN')
 VERIFY_TOKEN = os.environ.get('VERIFY_TOKEN', 'my_verify_token')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+print("GITHUB_TOKEN set: {}".format(bool(GITHUB_TOKEN)))
 GITHUB_REPO = 'Mmaikiller/my-chatbot'
 GITHUB_FILE = 'settings.json'
 GITHUB_BRANCH = 'master'
@@ -22,13 +27,14 @@ DEFAULT_SETTINGS = {
 }
 
 settings = dict(DEFAULT_SETTINGS)
+_last_settings_load = 0  # timestamp of last GitHub load
 
 CATEGORIES = {
     "แจ้งปัญหา": [
         "ปัญหา", "เสีย", "พัง", "ชำรุด", "ไม่ทำงาน", "ผิดพลาด",
         "ร้องเรียน", "บ่น", "ไม่พอใจ", "แย่",
         "ส่งของช้า", "ของไม่มา", "ไม่ได้ของ", "สูญหาย", "หาย",
-        "เปลี่ยน", "คืน", " refund", " return", "แจ้งปัญหา", "ช่วยแก้"
+        "เปลี่ยน", "คืน", "refund", "return", "แจ้งปัญหา", "ช่วยแก้"
     ],
     "สั่งซื้อ": [
         "สั่ง", "ซื้อ", "order", "buy", "อยากได้", "สนใจ", "จอง",
@@ -58,9 +64,15 @@ def classify_message(text):
     return "สอบถาม"
 
 # ========== GitHub API ==========
-def load_settings_from_github():
-    global settings
+_SETTINGS_CACHE_TTL = 60  # seconds — reload from GitHub at most once per minute
+
+def load_settings_from_github(force=False):
+    global settings, _last_settings_load
+    now = time.time()
+    if not force and (now - _last_settings_load) < _SETTINGS_CACHE_TTL:
+        return  # still fresh, skip API call
     if not GITHUB_TOKEN:
+        print("WARNING: GITHUB_TOKEN not set - cannot load settings from GitHub")
         return
     try:
         url = "https://api.github.com/repos/{}/contents/{}?ref={}".format(GITHUB_REPO, GITHUB_FILE, GITHUB_BRANCH)
@@ -73,6 +85,7 @@ def load_settings_from_github():
             settings = data
             if "chat_logs" not in settings:
                 settings["chat_logs"] = []
+            _last_settings_load = now
             print("Loaded {} keywords from GitHub".format(len(settings.get("keywords", {}))))
         else:
             print("GitHub load failed: {}".format(r.status_code))
@@ -137,6 +150,8 @@ def webhook():
                         reply = get_reply(payload)
                         if reply:
                             send_message(sender, reply)
+                        else:
+                            send_message(sender, "ขออภัยครับ ยังไม่เข้าใจคำถาม ลองพิมพ์ใหม่อีกครั้งครับ")
                         log_chat(sender, payload, classify_message(payload))
 
                 elif 'message' in event:
@@ -148,6 +163,8 @@ def webhook():
                         reply = get_reply(text)
                         if reply:
                             send_message(sender, reply)
+                        else:
+                            send_message(sender, "ขออภัยครับ ยังไม่เข้าใจคำถาม ลองพิมพ์ใหม่อีกครั้งครับ")
 
                         if category == "แจ้งปัญหา":
                             print("ALERT: แจ้งปัญหาจาก {} {}".format(sender, text))
@@ -185,14 +202,34 @@ def get_reply(text):
     if not text:
         return None
     text_lower = text.lower().strip()
-    for keyword, answer in settings.get("keywords", {}).items():
+    keywords = settings.get("keywords", {})
+    print("get_reply: text='{}', keywords_count={}".format(text, len(keywords)))
+    if not keywords:
+        print("WARNING: No keywords loaded! Check GITHUB_TOKEN on Render.")
+        return None
+
+    # --- Pass 1: longest-match-first substring ---
+    sorted_kw = sorted(keywords.keys(), key=len, reverse=True)
+    for keyword in sorted_kw:
         if keyword.lower() in text_lower:
-            return answer
-    keywords_list = list(settings.get("keywords", {}).keys())
-    if keywords_list:
-        close = get_close_matches(text_lower, keywords_list, n=1, cutoff=0.5)
-        if close:
-            return settings["keywords"][close[0]]
+            return keywords[keyword]
+
+    # --- Pass 2: fuzzy match per token (not the whole sentence) ---
+    tokens = re.findall(r'[\wก-๙]+', text_lower)
+    if tokens:
+        best_match, best_ratio = None, 0.0
+        for token in tokens:
+            if len(token) < 2:
+                continue  # skip single characters to avoid noise
+            close = get_close_matches(token, sorted_kw, n=1, cutoff=0.5)
+            if close:
+                ratio = len(close[0]) / len(token)
+                if ratio > best_ratio:
+                    best_match, best_ratio = close[0], ratio
+        if best_match:
+            return keywords[best_match]
+
+    # --- Pass 3: no match → None (caller decides fallback) ---
     return None
 
 def send_message(recipient_id, text):
@@ -215,10 +252,12 @@ def api_get_settings():
 
 @app.route('/api/settings', methods=['POST'])
 def api_update_settings():
-    global settings
+    global settings, _last_settings_load
     new_settings = request.get_json()
     settings.update(new_settings)
+    _last_settings_load = time.time()  # reset cache so load_settings_from_github() won't overwrite
     save_settings_to_github()
+    print("Settings updated via POST: {} keywords".format(len(settings.get("keywords", {}))))
     return jsonify({"success": True, "settings": settings})
 
 @app.route('/api/chat-logs', methods=['GET'])
@@ -258,6 +297,17 @@ def api_delete_keyword():
 def api_get_keywords():
     load_settings_from_github()
     return jsonify(settings.get("keywords", {}))
+
+@app.route('/api/debug', methods=['GET'])
+def api_debug():
+    return jsonify({
+        "github_token_set": bool(GITHUB_TOKEN),
+        "last_load": _last_settings_load,
+        "cache_age_seconds": int(time.time() - _last_settings_load) if _last_settings_load > 0 else -1,
+        "keywords_count": len(settings.get("keywords", {})),
+        "keywords": list(settings.get("keywords", {}).keys()),
+        "chat_logs_count": len(settings.get("chat_logs", []))
+    })
 
 if __name__ == '__main__':
     app.run(port=5000)
