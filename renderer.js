@@ -188,10 +188,32 @@ function addKeywordRow(keyword, answer) {
   var keywordList = document.getElementById('keyword-list');
   var item = document.createElement('div');
   item.className = 'keyword-item';
-  item.innerHTML = '<input type="text" class="keyword-input" placeholder="คำหลัก" value="' + keyword + '">' +
-    '<span class="keyword-arrow">\u2192</span>' +
-    '<input type="text" class="reply-input" placeholder="คำตอบ" value="' + answer + '">' +
-    '<button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">\uD83D\uDDD1\uFE0F</button>';
+
+  var kwInput = document.createElement('input');
+  kwInput.type = 'text';
+  kwInput.className = 'keyword-input';
+  kwInput.placeholder = 'คำหลัก';
+  kwInput.value = keyword;
+
+  var arrow = document.createElement('span');
+  arrow.className = 'keyword-arrow';
+  arrow.textContent = '\u2192';
+
+  var ansInput = document.createElement('input');
+  ansInput.type = 'text';
+  ansInput.className = 'reply-input';
+  ansInput.placeholder = 'คำตอบ';
+  ansInput.value = answer;
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'btn btn-danger btn-sm';
+  delBtn.textContent = '\uD83D\uDDD1\uFE0F';
+  delBtn.onclick = function() { item.remove(); };
+
+  item.appendChild(kwInput);
+  item.appendChild(arrow);
+  item.appendChild(ansInput);
+  item.appendChild(delBtn);
   keywordList.appendChild(item);
 }
 
@@ -290,7 +312,7 @@ async function saveToGitHub(payload, token) {
   };
 
   debugLog('info', 'GitHub: กำลังดึง SHA ไฟล์เดิมจาก ' + repo + '...');
-  var getResp = await fetch(url + '?ref=' + branch, { headers: headers });
+  var getResp = await fetch(url, { headers: headers });
   var sha = '';
   if (getResp.ok) {
     var fileData = await getResp.json();
